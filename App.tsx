@@ -1,51 +1,13 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import React from 'react';
-import {View,Text, StyleSheet } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import HomeScreen from '@screens/HomeScreen';
+
 function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.container}>
-        <Text style={styles.brand}>ShopAI DEMO</Text>
-        <Text style={styles.subtitle}>Đã thử kiểm tra môi trường (Fast Refresh)</Text>
-        <Text style={styles.hint}>
-          Đã thử sửa chữa lỗi một số chữ trên màn hình.
-        </Text>
-      </SafeAreaView>
+      <HomeScreen />
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  brand: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#FF4D4F',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#7F8C8D',
-    marginTop: 8,
-  },
-  hint: {
-    marginTop: 24,
-    fontSize: 12,
-    color: '#95A5A6',
-    textAlign: 'center',
-  },
-});
 
 export default App;
