@@ -6,6 +6,7 @@ import PropsDemo from './src/screens/demos/PropsDemo';
 import StateDemo from './src/screens/demos/StateDemo';
 import DemoPropsState from './src/screens/demos/DemoPropsState';
 import StyleSheetWalkthrough from './src/screens/demos/StyleSheetWalkthrough';
+import FetchDemo from './src/screens/demos/FetchDemo';
 
 function App(): React.JSX.Element {
   return (
@@ -14,7 +15,9 @@ function App(): React.JSX.Element {
       {/* <JsxWelcomeDemo /> */}
       {/* <PropsDemo /> */}
       {/* <StateDemo /> */}
-      <DemoPropsState />
+      {/* <DemoPropsState /> */}
+      {/* <StyleSheetWalkthrough /> */}
+      <FetchDemo />
       {/* <StyleSheetWalkthrough /> */}
     </SafeAreaProvider>
   );
