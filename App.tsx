@@ -1,5 +1,6 @@
 import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
 import HomeScreen from '@screens/HomeScreen';
 import JsxWelcomeDemo from './src/screens/demos/JsxWelcomeDemo';
 import PropsDemo from './src/screens/demos/PropsDemo';
@@ -21,6 +22,7 @@ import TextViewDemo from './src/screens/demos/TextView';
 import ImageView from './src/screens/demos/ImageView';
 import TextInput from './src/screens/demos/TextInput';
 import Skeleton from './src/screens/demos/Skeleton';
+import RootNavigator from '@navigation/RootNavigator';
 
 function App(): React.JSX.Element {
   return (
@@ -45,7 +47,8 @@ function App(): React.JSX.Element {
       {/* <TextViewDemo /> */}
       {/* <ImageView /> */}
       {/* <TextInput /> */}
-      <Skeleton />
+      {/* <Skeleton /> */}
+      <RootNavigator />
 
 
     </SafeAreaProvider>
