@@ -12,10 +12,10 @@ function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <Text style={styles.brand}>ShopAI</Text>
-        <Text style={styles.subtitle}>Môi trường đã sẵn sàng</Text>
+        <Text style={styles.brand}>ShopAI DEMO</Text>
+        <Text style={styles.subtitle}>Đã thử kiểm tra môi trường (Fast Refresh)</Text>
         <Text style={styles.hint}>
-          Thử sửa chữ bên trên → lưu file → màn hình tự cập nhật (Fast Refresh)
+          Đã thử sửa chữa lỗi một số chữ trên màn hình.
         </Text>
       </SafeAreaView>
     </SafeAreaProvider>
