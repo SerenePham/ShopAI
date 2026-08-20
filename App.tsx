@@ -27,7 +27,7 @@ import RootNavigator from '@navigation/RootNavigator';
 function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
-      {/* <HomeScreen /> */}
+      <HomeScreen />
       {/* <JsxWelcomeDemo /> */}
       {/* <PropsDemo /> */}
       {/* <StateDemo /> */}
@@ -48,7 +48,7 @@ function App(): React.JSX.Element {
       {/* <ImageView /> */}
       {/* <TextInput /> */}
       {/* <Skeleton /> */}
-      <RootNavigator />
+      {/* <RootNavigator /> */}
 
 
     </SafeAreaProvider>
