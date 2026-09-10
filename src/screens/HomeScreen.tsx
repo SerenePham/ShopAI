@@ -1,13 +1,20 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet } from "react-native";
-// ĐÚNG: SafeAreaView phải lấy từ 'react-native-safe-area-context', KHÔNG lấy từ 'react-native'
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { FlashList } from "@shopify/flash-list";
+import ShopButton from "@components/ui/ShopButton";
 import ProductCard from "@components/ui/ProductCard";
 import { MOCK_PRODUCTS } from "@data/mockProducts";
 import { COLORS, SIZES } from "@constants/theme";
+import type { HomeStackParamList } from "@navigation/HomeStackNavigator";
 
-const HomeScreen = () => {
+type HomeNavProp = NativeStackNavigationProp<HomeStackParamList, "Home">;
+
+const HomeScreen = ({ onLogout }: { onLogout: () => void }) => {
+  const navigation = useNavigation<HomeNavProp>();
+
   const [products, setProducts] = useState(MOCK_PRODUCTS);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -26,12 +33,32 @@ const HomeScreen = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Khám phá</Text>
+
+          <ShopButton
+            title="Thoát"
+            onPress={onLogout}
+            style={{
+              width: 80,
+              height: 32,
+              backgroundColor: COLORS.textLight,
+            }}
+          />
         </View>
 
         <FlashList
           data={products}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ProductCard product={item} />}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() =>
+                navigation.navigate("ProductDetail", {
+                  productId: item.id,
+                })
+              }
+            >
+              <ProductCard product={item} />
+            </Pressable>
+          )}
           numColumns={2}
           estimatedItemSize={260}
           refreshing={refreshing} // FlashList tự vẽ vòng xoay loading khi true
@@ -57,6 +84,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     paddingVertical: 15,
     backgroundColor: COLORS.surface,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: SIZES.h1,
