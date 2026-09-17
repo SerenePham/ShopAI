@@ -13,16 +13,10 @@ export type HomeStackParamList = {
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
-interface Props {
-  onLogout: () => void;
-}
-
-const HomeStackNavigator = ({ onLogout }: Props) => {
+const HomeStackNavigator = () => {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" options={{ headerShown: false }}>
-        {() => <HomeScreen onLogout={onLogout} />}
-      </Stack.Screen>
+      <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="ProductDetail"
         component={ProductDetailScreen}

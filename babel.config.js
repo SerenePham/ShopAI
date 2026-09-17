@@ -19,9 +19,12 @@ module.exports = {
           "@constants": "./src/constants",
           "@types": "./src/types",
           "@contexts": "./src/contexts",
+          "@api": "./src/api",
         },
       },
     ],
+
+    "@babel/plugin-transform-export-namespace-from",
     "react-native-reanimated/plugin", // LUÔN LUÔN đứng cuối cùng
   ],
 };
