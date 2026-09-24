@@ -9,7 +9,7 @@ import Animated, {
   Extrapolation,
 } from "react-native-reanimated";
 import { FlashList } from "@shopify/flash-list";
-import ProductCard from "@components/ProductCard";
+import ProductCard from "@components/ui/ProductCard";
 import { MOCK_PRODUCTS, Product } from "@data/mockProducts";
 import { COLORS, SIZES } from "@constants/theme";
 
