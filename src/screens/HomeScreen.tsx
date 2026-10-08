@@ -180,22 +180,15 @@ const HomeScreen = ({ navigation, route}: Props) => {
           <Text style={styles.headerTitle}>Khám phá</Text>
           <View style={{ flexDirection: "row", gap: 10 }}>
             <ShopButton
-              title={`Giỏ hàng (${totalQuantity})`}
-              onPress={() => navigation.navigate("Cart")}
-              style={{
-                width: 120,
-                height: 32,
-                backgroundColor: COLORS.secondary,
-              }}
-              textStyle={{ fontSize: 12 }}
+              title="Hỏi AI"
+              onPress={() => navigation.navigate('AIChat')}
+              style={{ width: 90, height: 32, backgroundColor: COLORS.primary }}
             />
-
             <ShopButton
               title="Quét Mã"
               onPress={() => navigation.navigate('Scanner')}
               style={{ width: 100, height: 32, backgroundColor: COLORS.secondary }}
             />
-            
             <ShopButton
               title="Thoát"
               onPress={logout}

@@ -1,4 +1,7 @@
 {
   "name": "ShopAI",
-  "displayName": "ShopAI"
+  "displayName": "ShopAI",
+  "plugins": [
+    "expo-secure-store"
+  ]
 }
