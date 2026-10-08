@@ -12,4 +12,4 @@
 // gọi Gemini AI sẽ chuyển xuống Backend NestJS. Mobile lúc đó chỉ gọi vào
 // API nội bộ của chính chúng ta (`/api/ai/chat`) — không hề biết Key thật.
 // ============================================================================
-export const GEMINI_API_KEY = 'TEST TEST';
+export const GEMINI_API_KEY = 'TEST TEST Test';
