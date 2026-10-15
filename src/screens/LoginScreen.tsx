@@ -5,6 +5,7 @@ import ShopButton from '@components/ui/ShopButton';
 import ShopInput from '@components/ui/ShopInput';
 import { COLORS, SIZES } from '@constants/theme';
 import { useAuthStore } from '@store/useAuthStore';
+import axiosClient from '@api/axiosClient';
 
 const LoginScreen = () => {
   const navigation = useNavigation<any>();
@@ -12,8 +13,9 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const login = useAuthStore(state => state.login);
+  const login = useAuthStore((state) => state.login);
 
   const validate = () => {
     const next: { email?: string; password?: string } = {};
@@ -23,13 +25,18 @@ const LoginScreen = () => {
     return Object.keys(next).length === 0;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!validate()) return;
     setLoading(true);
-    setTimeout(() => {
+    setServerError(null);
+    try {
+      const response = await axiosClient.post('/api/auth/login', { email, password });
+      login(response.data.accessToken);
+    } catch (error: any) {
+      setServerError(error?.response?.data?.message ?? 'Đăng nhập thất bại, vui lòng thử lại');
+    } finally {
       setLoading(false);
-      login('mock_token_123');
-    }, 1200);
+    }
   };
 
   return (
@@ -54,6 +61,8 @@ const LoginScreen = () => {
         error={errors.password}
         secureTextEntry
       />
+
+      {serverError && <Text style={styles.errorText}>⚠️ {serverError}</Text>}
 
       <ShopButton
         title="Đăng nhập ngay"
@@ -95,6 +104,7 @@ const styles = StyleSheet.create({
   registerLink: { marginTop: 20, alignItems: 'center' },
   registerLinkText: { fontSize: SIZES.body2, color: COLORS.textLight },
   registerLinkBold: { color: COLORS.primary, fontWeight: '700' },
+  errorText: { color: COLORS.danger, fontSize: SIZES.body2, textAlign: 'center', marginBottom: 12 },
 });
 
 export default LoginScreen;

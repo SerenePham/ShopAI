@@ -8,6 +8,7 @@ export const COLORS = {
     textLight: "#7F8C8D",
     border: "#E8E8E8",
     error: "#FF0000",
+    danger: "#FF4D4F",
     success: "#52C41A",
   };
   

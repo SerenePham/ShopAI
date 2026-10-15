@@ -1,74 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import ShopButton from '@components/ui/ShopButton';
 import { useCartStore, CartItem } from '@store/useCartStore';
-import { useOrderStore } from '@store/useOrderStore';
 import { COLORS, SIZES } from '@constants/theme';
+import { formatCurrency } from '@utils/formatCurrency';
+import axiosClient from '@api/axiosClient';
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+type CreateOrderResponse = { id: string; status: string; total: number; createdAt: string };
 
-interface CreateOrderPayload {
-  items: CartItem[];
-  totalPrice: number;
-}
-
-interface CreateOrderResponse {
-    orderId: string;
-    status: 'PENDING';
-  }
-
-// Hàm GHI dữ liệu lên Server qua axiosClient (Interceptor tự gắn Token — Phần 6.6).
-// URL vẫn là Mock cho tới khi có Backend NestJS thật ở Chương 9, nhưng CẤU TRÚC gọi API
-// đã đúng chuẩn Production ngay từ bây giờ — Chương 9 chỉ cần đổi baseURL, KHÔNG sửa gì ở đây.
-const createOrderLocal = async (payload: CreateOrderPayload): Promise<CreateOrderResponse> => {
-    // Ch.6: giả lập Server. Ch.9 Bước 9c: đổi thành axiosClient.post('/orders', { items, total })
-    await new Promise((r) => setTimeout(r, 1200));
-    return { orderId: `ORD-${Date.now()}`, status: 'PENDING' };
-  };
+const placeOrderAPI = async (items: CartItem[], total: number): Promise<CreateOrderResponse> => {
+  const response = await axiosClient.post('/api/orders', {
+    items: items.map((item) => ({ productId: item.id, quantity: item.quantity })),
+    total,
+  });
+  return response.data;
+};
 
 const CheckoutScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const items = useCartStore((state) => state.items);
   const totalQuantity = useCartStore((state) => state.totalQuantity());
   const totalPrice = useCartStore((state) => state.totalPrice());
   const clearCart = useCartStore((state) => state.clearCart);
-  const addOrder = useOrderStore((s) => s.addOrder);
 
-  // useMutation: hành động GHI dữ liệu (POST /orders) — CHỈ chạy khi ta gọi mutate(), không tự động như useQuery
-  const { mutate, isPending, isError, isSuccess, data } = useMutation({
-    mutationFn: createOrderLocal,
-    onSuccess: (res) => {
-      addOrder({
-        id: res.orderId,
-        items: [...items],
-        total: totalPrice,
-        status: 'PENDING',
-        createdAt: new Date().toISOString(),
-      });
+  const [isPlacing, setIsPlacing] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    setIsPlacing(true);
+    setErrorMessage(null);
+    try {
+      const order = await placeOrderAPI(items, totalPrice);
+      setOrderId(order.id);
+      setIsDone(true);
       clearCart();
-      queryClient.invalidateQueries({ queryKey: ['productsInfinite'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
       setTimeout(() => navigation.goBack(), 1500);
-    },
-    onError: (err) => console.error('❌ Đặt hàng thất bại:', err),
-  });
-
-  const handleConfirm = () => {
-    mutate({ items, totalPrice }); // Chỉ khi bấm nút, request thật sự mới bay đi
+    } catch (error: any) {
+      const serverMessage = error?.response?.data?.message;
+      const message = Array.isArray(serverMessage)
+        ? serverMessage.join(', ')
+        : serverMessage ?? 'Đặt hàng thất bại, vui lòng thử lại';
+      setErrorMessage(message);
+    } finally {
+      setIsPlacing(false);
+    }
   };
 
-  if (isSuccess) {
+  if (isDone) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.center}>
-            <Text style={styles.successIcon}>✅</Text>
-            <Text style={styles.successText}>Đặt hàng thành công!</Text>
-            <Text>Mã đơn: {data?.orderId}</Text>
-            <Text>Trạng thái: PENDING (chờ thanh toán)</Text>
+          <Text style={styles.successIcon}>✅</Text>
+          <Text style={styles.successText}>Đặt hàng thành công!</Text>
+          <Text style={styles.orderIdText}>Mã đơn: {orderId}</Text>
         </View>
       </SafeAreaView>
     );
@@ -88,12 +79,9 @@ const CheckoutScreen = () => {
           <Text style={styles.totalValue}>{formatCurrency(totalPrice)}</Text>
         </View>
 
-        {/* isError: hiện khi mutation thất bại (mất mạng, Server lỗi...) — KHÔNG rời màn hình, cho thử lại */}
-        {isError && (
-          <Text style={styles.errorText}>Đặt hàng thất bại — vui lòng kiểm tra mạng và bấm thử lại!</Text>
-        )}
+        {errorMessage && <Text style={styles.errorText}>⚠️ {errorMessage}</Text>}
 
-        {isPending ? (
+        {isPlacing ? (
           <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 24 }} />
         ) : (
           <ShopButton
@@ -123,10 +111,11 @@ const styles = StyleSheet.create({
   value: { fontSize: SIZES.body1, color: COLORS.text, fontWeight: '600' },
   totalValue: { fontSize: SIZES.h2, color: COLORS.primary, fontWeight: 'bold' },
   confirmBtn: { marginTop: 32 },
-  errorText: { color: COLORS.error, textAlign: 'center', marginTop: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   successIcon: { fontSize: 60, marginBottom: 12 },
   successText: { fontSize: SIZES.h2, fontWeight: 'bold', color: COLORS.success },
+  orderIdText: { marginTop: 8, fontSize: SIZES.body2, color: COLORS.textLight },
+  errorText: { marginTop: 16, color: COLORS.danger, fontSize: SIZES.body2, textAlign: 'center' },
 });
 
 export default CheckoutScreen;

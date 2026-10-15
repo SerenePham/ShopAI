@@ -1,21 +1,44 @@
 import React from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { useOrderStore } from '@store/useOrderStore';
+import { useQuery } from '@tanstack/react-query';
+import axiosClient from '@api/axiosClient';
 import { COLORS, SIZES } from '@constants/theme';
+import { formatCurrency } from '@utils/formatCurrency';
 
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+export type OrderItem = {
+  id: string;
+  total: number;
+  status: string;
+  createdAt: string;
+};
 
 const OrdersScreen = () => {
   const navigation = useNavigation<any>();
-  const orders = useOrderStore((s) => s.orders);
+
+  const { data: orders = [], isLoading, isError, refetch, isRefetching } = useQuery<OrderItem[]>({
+    queryKey: ['orders'],
+    queryFn: async () => {
+      const res = await axiosClient.get('/api/orders');
+      return res.data;
+    },
+  });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Text style={styles.title}>Đơn hàng của tôi</Text>
-      {orders.length === 0 ? (
+      {isLoading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : isError ? (
+        <View style={styles.empty}>
+          <Text style={[styles.emptyText, { color: COLORS.danger }]}>
+            Không thể tải danh sách đơn hàng. Kéo xuống để thử lại.
+          </Text>
+        </View>
+      ) : orders.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>Chưa có đơn nào. Hãy đặt hàng từ Giỏ.</Text>
         </View>
@@ -24,6 +47,8 @@ const OrdersScreen = () => {
           data={orders}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: SIZES.padding }}
+          refreshing={isRefetching}
+          onRefresh={refetch}
           renderItem={({ item }) => (
             <Pressable
               style={styles.card}
@@ -75,7 +100,7 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyText: { color: COLORS.textLight, textAlign: 'center' },
   card: {
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.white ?? '#FFF',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,

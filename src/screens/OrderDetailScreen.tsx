@@ -1,21 +1,42 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ShopButton from '@components/ui/ShopButton';
-import { useOrderStore } from '@store/useOrderStore';
 import { COLORS, SIZES } from '@constants/theme';
 import { RootStackParamList } from '@navigation/RootStackNavigator';
+import { formatCurrency } from '@utils/formatCurrency';
+import axiosClient from '@api/axiosClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderDetail'>;
 
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
-
 const OrderDetailScreen = ({ route }: Props) => {
   const { orderId } = route.params;
-  const order = useOrderStore((s) => s.getById(orderId));
-  const markPaid = useOrderStore((s) => s.markPaid);
+
+  const { data: order, isLoading } = useQuery({
+    queryKey: ['order', orderId],
+    queryFn: async () => (await axiosClient.get(`/api/orders/${orderId}`)).data,
+  });
+
+  const queryClient = useQueryClient();
+  const payMutation = useMutation({
+    mutationFn: async () => (await axiosClient.post(`/api/orders/${orderId}/pay`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!order) {
     return (
@@ -34,9 +55,9 @@ const OrderDetailScreen = ({ route }: Props) => {
         <Text style={styles.row}>Ngày: {new Date(order.createdAt).toLocaleString('vi-VN')}</Text>
 
         <Text style={[styles.heading, { marginTop: 20 }]}>Chi tiết</Text>
-        {order.items.map((it) => (
+        {order.items?.map((it: any) => (
           <View key={it.id} style={styles.itemRow}>
-            <Text style={{ flex: 1 }}>{it.name} × {it.quantity}</Text>
+            <Text style={{ flex: 1 }}>{it.name ?? it.productId} × {it.quantity}</Text>
             <Text>{formatCurrency(it.price * it.quantity)}</Text>
           </View>
         ))}
@@ -46,7 +67,8 @@ const OrderDetailScreen = ({ route }: Props) => {
         {order.status === 'PENDING' ? (
           <ShopButton
             title="Thanh toán giả lập (→ PAID)"
-            onPress={() => markPaid(order.id)}
+            onPress={() => payMutation.mutate()}
+            isLoading={payMutation.isPending}
             style={{ marginTop: 24 }}
           />
         ) : (
@@ -59,6 +81,7 @@ const OrderDetailScreen = ({ route }: Props) => {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   container: { padding: SIZES.padding },
   heading: { fontSize: SIZES.h3, fontWeight: '800', color: COLORS.primary, marginBottom: 8 },
   row: { marginBottom: 4, color: COLORS.text },
