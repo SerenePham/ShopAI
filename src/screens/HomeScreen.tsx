@@ -25,6 +25,7 @@ import LocationBadge from "@components/ui/LocationBadge";
 import { API_BASE_URL } from "@constants/api";
 import { useTheme } from "@contexts/ThemeContext";
 import { products as localFallbackProducts } from "@data/products";
+import AddToCartModal from "@components/ui/AddToCartModal";
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, "Home">,
@@ -59,6 +60,7 @@ const fetchProductsAPI = async (): Promise<Product[]> => {
 
 const HomeScreen = ({ navigation, route }: Props) => {
   const logout = useAuthStore((state) => state.logout);
+  const addItem = useCartStore((state) => state.addItem);
   const totalQuantity = useCartStore((state) => state.totalQuantity());
   const { colors, isDark, toggleTheme } = useTheme();
 
@@ -66,6 +68,7 @@ const HomeScreen = ({ navigation, route }: Props) => {
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
   const [isServerOnline, setIsServerOnline] = useState<boolean | null>(null);
   const [timeLeft, setTimeLeft] = useState(3 * 60 + 36); // Countdown 03:36
+  const [selectedProductForBuy, setSelectedProductForBuy] = useState<Product | null>(null);
 
   const scannedCode = route.params?.scannedCode;
 
@@ -117,6 +120,31 @@ const HomeScreen = ({ navigation, route }: Props) => {
     queryFn: fetchProductsAPI,
     initialData: localFallbackProducts,
   });
+
+  // Xử lý khi quét mã QR/Barcode:
+  // Nếu có ID chính xác -> mở thẳng màn hình chi tiết món hàng.
+  // Nếu không -> đưa thẳng mã quét được vào thanh tìm kiếm.
+  useEffect(() => {
+    if (scannedCode) {
+      const codeStr = String(scannedCode).trim();
+      const matched = allProducts.find(
+        (p) =>
+          String(p.id) === codeStr ||
+          String(p.id).replace("backend_prod_", "") === codeStr.replace("backend_prod_", "")
+      );
+
+      if (matched) {
+        navigation.navigate("ProductDetail", {
+          productId: String(matched.id),
+        });
+      } else {
+        setSearch(codeStr);
+      }
+
+      // Xóa param scannedCode để tránh lặp lại khi user back về HomeScreen
+      navigation.setParams({ scannedCode: undefined } as any);
+    }
+  }, [scannedCode, allProducts, navigation]);
 
   const filteredProducts = useMemo(() => {
     let result = allProducts;
@@ -194,11 +222,210 @@ const HomeScreen = ({ navigation, route }: Props) => {
     return result;
   }, [allProducts, search, selectedCategory]);
 
+  // Header cuộn tự nhiên: Flash Sale, Search, Quick Actions, Categories
+  // Khi người dùng vuốt xem hàng hóa, toàn bộ phần này sẽ trượt ẩn đi mượt mà!
+  const renderListHeader = () => (
+    <View>
+      {/* Location / Shipping Banner */}
+      <LocationBadge />
+
+      {/* Quick Action Buttons */}
+      <View style={styles.quickActionsContainer}>
+        {/* Cart Button */}
+        <Pressable
+          style={[styles.quickBtn, styles.cartBtn]}
+          onPress={() => navigation.navigate("Cart")}
+        >
+          <View style={styles.quickBtnRow}>
+            <Text style={styles.quickBtnEmoji}>🛒</Text>
+            <Text style={styles.cartBtnText} numberOfLines={1}>
+              Giỏ ({totalQuantity})
+            </Text>
+          </View>
+        </Pressable>
+
+        {/* AI Assistant Button */}
+        <Pressable
+          style={[styles.quickBtn, styles.aiBtn]}
+          onPress={() => navigation.navigate("AIChat")}
+        >
+          <View style={styles.quickBtnRow}>
+            <Text style={styles.quickBtnEmoji}>🤖</Text>
+            <Text style={styles.aiBtnText} numberOfLines={1}>
+              Hỏi AI
+            </Text>
+          </View>
+        </Pressable>
+
+        {/* Scan Button */}
+        <Pressable
+          style={[
+            styles.quickBtn,
+            styles.outlineBtn,
+            isDark && styles.outlineBtnDark,
+          ]}
+          onPress={() => navigation.navigate("Scanner")}
+        >
+          <View style={styles.quickBtnRow}>
+            <Text style={styles.quickBtnEmoji}>📷</Text>
+            <Text
+              style={[
+                styles.outlineBtnText,
+                isDark && { color: "#FFFFFF" },
+              ]}
+              numberOfLines={1}
+            >
+              Quét mã
+            </Text>
+          </View>
+        </Pressable>
+
+        {/* Order Tracking Button */}
+        <Pressable
+          style={[
+            styles.quickBtn,
+            styles.outlineBtn,
+            isDark && styles.outlineBtnDark,
+          ]}
+          onPress={() => navigation.navigate("Orders")}
+        >
+          <View style={styles.quickBtnRow}>
+            <Text style={styles.quickBtnEmoji}>🚚</Text>
+            <Text
+              style={[
+                styles.outlineBtnText,
+                isDark && { color: "#FFFFFF" },
+              ]}
+              numberOfLines={1}
+            >
+              Đơn hàng
+            </Text>
+          </View>
+        </Pressable>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchSection}>
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              backgroundColor: isDark ? "#262626" : "#F3F4F6",
+              borderColor: isDark ? "#404040" : "#E5E7EB",
+            },
+          ]}
+        >
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Tìm kiếm điện thoại, tai nghe, đồng hồ..."
+            placeholderTextColor={isDark ? "#888888" : "#9CA3AF"}
+            style={[styles.searchInput, { color: colors.text }]}
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch("")} hitSlop={10}>
+              <Text style={{ color: "#9CA3AF", fontSize: 16, paddingHorizontal: 4 }}>
+                ✕
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {/* Flash Sale Banner - bây giờ sẽ cuộn trượt ẩn đi khi lướt xem hàng hóa */}
+      <View style={styles.flashSaleBanner}>
+        <View style={styles.flashSaleLeft}>
+          <Text style={styles.flashSaleHeading}>⚡ FLASH SALE HÔM NAY</Text>
+          <Text style={styles.flashSaleSubtitle}>
+            Giảm đến 50% khi thanh toán qua ShopAI
+          </Text>
+        </View>
+        <View style={styles.flashSaleTimerCard}>
+          <Text style={styles.flashSaleTimerLabel}>Kết thúc trong</Text>
+          <Text style={styles.flashSaleTimerText}>{formattedCountdown}</Text>
+        </View>
+      </View>
+
+      {/* Categories Horizontal Bar */}
+      <View
+        style={[styles.categoryWrapper, { backgroundColor: colors.background }]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryContainer}
+        >
+          {categories.map((category) => {
+            const active = selectedCategory === category;
+            return (
+              <Pressable
+                key={category}
+                onPress={() => setSelectedCategory(category)}
+                style={[
+                  styles.categoryButton,
+                  {
+                    backgroundColor: active
+                      ? "#FF5733"
+                      : isDark
+                      ? "#262626"
+                      : "#EEEEEE",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryText,
+                    {
+                      color: active
+                        ? "#FFFFFF"
+                        : isDark
+                        ? "#CCCCCC"
+                        : "#555555",
+                      fontWeight: active ? "700" : "500",
+                    },
+                  ]}
+                >
+                  {category}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Tiêu đề danh mục hàng hóa */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionTitleText, { color: colors.text }]}>
+          {selectedCategory === "Tất cả" ? "🔥 Tất cả sản phẩm" : `📱 ${selectedCategory}`}
+        </Text>
+        <Text style={[styles.sectionCountText, { color: colors.textLight }]}>
+          ({filteredProducts.length} món)
+        </Text>
+      </View>
+
+      {/* Loading / Error states */}
+      {isLoading && allProducts.length === 0 && (
+        <ActivityIndicator
+          size="large"
+          color="#FF5733"
+          style={{ marginVertical: 30 }}
+        />
+      )}
+
+      {isError && allProducts.length === 0 && (
+        <Text style={{ textAlign: "center", marginVertical: 30, color: "red" }}>
+          {(error as Error)?.message ?? "Lỗi kết nối máy chủ"}
+        </Text>
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* 1. Header Section */}
-        <View style={[styles.header, { backgroundColor: colors.surface }]}>
+        {/* 1. Header Section - Khóa ở trên đỉnh */}
+        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: isDark ? '#2D2D2D' : '#E5E7EB', borderBottomWidth: 1 }]}>
           <View style={styles.headerBranding}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text style={styles.appTitle}>Binh Pham Store</Text>
@@ -260,183 +487,35 @@ const HomeScreen = ({ navigation, route }: Props) => {
           </View>
         </View>
 
-        {/* 2. Location / Shipping Banner */}
-        <LocationBadge />
-
-        {/* Thông báo quét mã QR nếu có */}
-        {scannedCode && (
-          <View style={styles.scannedCodeBanner}>
-            <Text style={styles.scannedCodeText}>
-              📷 Mã vừa quét: {scannedCode}
-            </Text>
-          </View>
-        )}
-
-        {/* 3. Quick Action Buttons (Row of 4 items) */}
-        <View style={styles.quickActionsContainer}>
-          {/* Cart Button */}
-          <Pressable
-            style={[styles.quickBtn, styles.cartBtn]}
-            onPress={() => navigation.navigate("Cart")}
-          >
-            <Text style={styles.cartBtnText}>🛒 Giỏ ({totalQuantity})</Text>
-          </Pressable>
-
-          {/* AI Assistant Button */}
-          <Pressable
-            style={[styles.quickBtn, styles.aiBtn]}
-            onPress={() => navigation.navigate("AIChat")}
-          >
-            <Text style={styles.aiBtnText}>🤖 Hỏi AI</Text>
-          </Pressable>
-
-          {/* Scan Button */}
-          <Pressable
-            style={[
-              styles.quickBtn,
-              styles.outlineBtn,
-              isDark && styles.outlineBtnDark,
-            ]}
-            onPress={() => navigation.navigate("Scanner")}
-          >
-            <Text style={styles.outlineBtnText}>📷 Quét</Text>
-          </Pressable>
-
-          {/* Order Tracking Button */}
-          <Pressable
-            style={[
-              styles.quickBtn,
-              styles.outlineBtn,
-              isDark && styles.outlineBtnDark,
-            ]}
-            onPress={() => navigation.navigate("Orders")}
-          >
-            <Text style={styles.outlineBtnText}>Đơn hàng</Text>
-          </Pressable>
-        </View>
-
-        {/* 4. Search Bar */}
-        <View style={styles.searchSection}>
-          <View
-            style={[
-              styles.searchContainer,
-              {
-                backgroundColor: isDark ? "#262626" : "#F3F4F6",
-                borderColor: isDark ? "#404040" : "#E5E7EB",
-              },
-            ]}
-          >
-            <Text style={styles.searchIcon}>🔍</Text>
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Tìm kiếm điện thoại, tai nghe, đồng hồ..."
-              placeholderTextColor={isDark ? "#888888" : "#9CA3AF"}
-              style={[styles.searchInput, { color: colors.text }]}
-            />
-            {search.length > 0 && (
-              <Pressable onPress={() => setSearch("")} hitSlop={10}>
-                <Text style={{ color: "#9CA3AF", fontSize: 16, paddingHorizontal: 4 }}>
-                  ✕
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {/* 5. Flash Sale Banner */}
-        <View style={styles.flashSaleBanner}>
-          <View style={styles.flashSaleLeft}>
-            <Text style={styles.flashSaleHeading}>⚡ FLASH SALE HÔM NAY</Text>
-            <Text style={styles.flashSaleSubtitle}>
-              Giảm đến 50% khi thanh toán qua ShopAI
-            </Text>
-          </View>
-          <View style={styles.flashSaleTimerCard}>
-            <Text style={styles.flashSaleTimerLabel}>Kết thúc trong</Text>
-            <Text style={styles.flashSaleTimerText}>{formattedCountdown}</Text>
-          </View>
-        </View>
-
-        {/* Categories Horizontal Bar */}
-        <View
-          style={[styles.categoryWrapper, { backgroundColor: colors.background }]}
-        >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryContainer}
-          >
-            {categories.map((category) => {
-              const active = selectedCategory === category;
-              return (
-                <Pressable
-                  key={category}
-                  onPress={() => setSelectedCategory(category)}
-                  style={[
-                    styles.categoryButton,
-                    {
-                      backgroundColor: active
-                        ? "#FF5733"
-                        : isDark
-                        ? "#262626"
-                        : "#EEEEEE",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      {
-                        color: active
-                          ? "#FFFFFF"
-                          : isDark
-                          ? "#CCCCCC"
-                          : "#555555",
-                        fontWeight: active ? "700" : "500",
-                      },
-                    ]}
-                  >
-                    {category}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Loading / Error states */}
-        {isLoading && allProducts.length === 0 && (
-          <ActivityIndicator
-            size="large"
-            color="#FF5733"
-            style={{ marginTop: 40 }}
-          />
-        )}
-
-        {isError && allProducts.length === 0 && (
-          <Text style={{ textAlign: "center", marginTop: 40, color: "red" }}>
-            {(error as Error)?.message ?? "Lỗi kết nối máy chủ"}
-          </Text>
-        )}
-
-        {/* 6. Product List */}
+        {/* 2. Danh sách sản phẩm cuộn tự nhiên: Flash Sale & Search sẽ trượt ẩn đi khi cuộn xuống */}
         <FlashList
           data={filteredProducts}
           keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() =>
-                navigation.navigate("ProductDetail", {
-                  productId: String(item.id),
-                })
-              }
+          ListHeaderComponent={renderListHeader}
+          renderItem={({ item, index }) => (
+            <View
+              style={{
+                flex: 1,
+                paddingLeft: index % 2 === 0 ? SIZES.padding : 6,
+                paddingRight: index % 2 === 0 ? 6 : SIZES.padding,
+              }}
             >
-              <ProductCard product={item} />
-            </Pressable>
+              <Pressable
+                onPress={() =>
+                  navigation.navigate("ProductDetail", {
+                    productId: String(item.id),
+                  })
+                }
+              >
+                <ProductCard
+                  product={item}
+                  onBuyPress={(prod) => setSelectedProductForBuy(prod)}
+                />
+              </Pressable>
+            </View>
           )}
           numColumns={2}
-          contentContainerStyle={{ padding: SIZES.padding }}
+          contentContainerStyle={{ paddingBottom: 24 }}
           refreshing={isRefetching}
           onRefresh={refetch}
           ListEmptyComponent={
@@ -446,6 +525,16 @@ const HomeScreen = ({ navigation, route }: Props) => {
               </Text>
             </View>
           }
+        />
+
+        {/* Popup chọn số lượng khi bấm Mua */}
+        <AddToCartModal
+          visible={Boolean(selectedProductForBuy)}
+          product={selectedProductForBuy}
+          onClose={() => setSelectedProductForBuy(null)}
+          onConfirm={(prod, qty) => {
+            addItem(prod, qty);
+          }}
         />
       </View>
     </SafeAreaView>
@@ -520,7 +609,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: SIZES.padding,
     marginVertical: 6,
-    gap: 8,
+    gap: 6,
   },
   quickBtn: {
     flex: 1,
@@ -528,13 +617,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 2,
+  },
+  quickBtnRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  quickBtnEmoji: {
+    fontSize: 12,
   },
   cartBtn: {
     backgroundColor: "#FF5733",
   },
   cartBtnText: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
   aiBtn: {
@@ -542,7 +641,7 @@ const styles = StyleSheet.create({
   },
   aiBtnText: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
   outlineBtn: {
@@ -555,7 +654,7 @@ const styles = StyleSheet.create({
   },
   outlineBtnText: {
     color: "#FF5733",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
 
@@ -656,6 +755,22 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SIZES.padding,
+    marginTop: 10,
+    marginBottom: 6,
+    gap: 6,
+  },
+  sectionTitleText: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  sectionCountText: {
+    fontSize: 13,
+    fontWeight: "500",
   },
 });
 

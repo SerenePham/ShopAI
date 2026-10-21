@@ -10,6 +10,7 @@ export const ProductSchema = z.object({
   stock: z.number().optional(),
   rating: z.number().optional(),
   imageUrl: z.string().optional(),
+  description: z.string().optional(),
 });
 
 // Khuôn mẫu cho cả một Danh sách (Mảng) sản phẩm trả về từ API

@@ -26,7 +26,7 @@ const HomeStackNavigator = () => {
       <Stack.Screen
         name="ProductDetail"
         component={ProductDetailScreen}
-        options={{ title: "Chi tiết sản phẩm" }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen name="AIChat" component={AIChatScreen} options={{ title: 'Tư vấn AI' }} />
     </Stack.Navigator>

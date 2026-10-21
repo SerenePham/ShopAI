@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import axiosClient from '@api/axiosClient';
 import { COLORS, SIZES } from '@constants/theme';
 import { formatCurrency } from '@utils/formatCurrency';
+import { useTheme } from '@contexts/ThemeContext';
 
 export type OrderItem = {
   id: string;
@@ -16,6 +17,7 @@ export type OrderItem = {
 
 const OrdersScreen = () => {
   const navigation = useNavigation<any>();
+  const { colors, isDark } = useTheme();
 
   const { data: orders = [], isLoading, isError, refetch, isRefetching } = useQuery<OrderItem[]>({
     queryKey: ['orders'],
@@ -26,8 +28,8 @@ const OrdersScreen = () => {
   });
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.title}>Đơn hàng của tôi</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
+      <Text style={[styles.title, { color: colors.text }]}>Đơn hàng của tôi</Text>
       {isLoading ? (
         <View style={styles.empty}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -40,7 +42,7 @@ const OrdersScreen = () => {
         </View>
       ) : orders.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Chưa có đơn nào. Hãy đặt hàng từ Giỏ.</Text>
+          <Text style={[styles.emptyText, { color: colors.textLight }]}>Chưa có đơn nào. Hãy đặt hàng từ Giỏ.</Text>
         </View>
       ) : (
         <FlatList
@@ -51,10 +53,17 @@ const OrdersScreen = () => {
           onRefresh={refetch}
           renderItem={({ item }) => (
             <Pressable
-              style={styles.card}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: isDark ? '#333333' : '#E5E7EB',
+                  borderWidth: 1,
+                },
+              ]}
               onPress={() => navigation.navigate('OrderDetail', { orderId: item.id })}
             >
-              <Text style={styles.orderId}>{item.id}</Text>
+              <Text style={[styles.orderId, { color: colors.text }]}>{item.id}</Text>
 
               <View style={styles.metaRow}>
                 <Text style={styles.meta}>

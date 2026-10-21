@@ -10,7 +10,7 @@ export interface CartItem extends Product {
 
 interface CartState {
   items: CartItem[];
-  addItem: (product: Product) => void;
+  addItem: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   totalQuantity: () => number;
   totalPrice: () => number;
@@ -22,18 +22,19 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
 
-      // Nếu sản phẩm đã có trong giỏ -> Chỉ tăng quantity. Chưa có -> Thêm dòng mới.
-      addItem: (product) => {
+      // Nếu sản phẩm đã có trong giỏ -> Tăng quantity. Chưa có -> Thêm dòng mới.
+      addItem: (product, quantity = 1) => {
+        const qtyToAdd = Math.max(1, quantity);
         set((state) => {
           const existing = state.items.find((item) => item.id === product.id);
           if (existing) {
             return {
               items: state.items.map((item) =>
-                item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+                item.id === product.id ? { ...item, quantity: item.quantity + qtyToAdd } : item
               ),
             };
           }
-          return { items: [...state.items, { ...product, quantity: 1 }] };
+          return { items: [...state.items, { ...product, quantity: qtyToAdd }] };
         });
       },
 

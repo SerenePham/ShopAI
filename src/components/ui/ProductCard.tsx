@@ -12,16 +12,27 @@ const CARD_WIDTH = (width - SIZES.padding * 3) / 2;
 
 interface Props {
   product: Product;
+  onBuyPress?: (product: Product) => void;
 }
 
-const ProductCard = ({ product }: Props) => {
+const ProductCard = ({ product, onBuyPress }: Props) => {
   const addItem = useCartStore((state) => state.addItem);
   const { colors, isDark } = useTheme();
   const imageSource = getProductImageSource(product);
 
+  const handleBuy = () => {
+    if (onBuyPress) {
+      onBuyPress(product);
+    } else {
+      addItem(product);
+    }
+  };
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#EFEFEF' }]}>
-      <Image source={imageSource} style={styles.image} resizeMode="cover" />
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333333' : '#E5E7EB' }]}>
+      <View style={[styles.imageContainer, { backgroundColor: isDark ? '#262626' : '#F9FAFB' }]}>
+        <Image source={imageSource} style={styles.image} resizeMode="contain" />
+      </View>
       <View style={styles.infoContainer}>
         <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
           {product.name}
@@ -32,7 +43,7 @@ const ProductCard = ({ product }: Props) => {
 
         <ShopButton
           title="Mua ngay"
-          onPress={() => addItem(product)}
+          onPress={handleBuy}
           style={styles.button}
           textStyle={{ fontSize: 12, fontWeight: '700' }}
         />
@@ -43,35 +54,41 @@ const ProductCard = ({ product }: Props) => {
 
 const styles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
-    borderRadius: SIZES.radius,
-    marginBottom: SIZES.padding,
+    width: '100%',
+    borderRadius: 12,
+    marginBottom: 12,
     overflow: 'hidden',
     borderWidth: 1,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+  },
+
+  imageContainer: {
+    width: '100%',
+    height: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
   },
 
   image: {
     width: '100%',
-    height: CARD_WIDTH,
-    backgroundColor: '#F0F0F0',
+    height: '100%',
   },
 
   infoContainer: {
     padding: 10,
-    justifyContent: 'space-between',
-    flex: 1,
   },
 
   name: {
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 6,
-    minHeight: 36,
+    marginBottom: 4,
+    height: 36,
+    lineHeight: 18,
   },
 
   price: {

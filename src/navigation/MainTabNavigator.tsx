@@ -4,6 +4,9 @@ import HomeStackNavigator from '@navigation/HomeStackNavigator';
 import CartScreen from '@screens/CartScreen';
 import OrdersScreen from '@screens/OrdersScreen';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useTheme } from '@contexts/ThemeContext';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type MainTabParamList = {
   HomeTab: undefined;
@@ -14,10 +17,31 @@ export type MainTabParamList = {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabNavigator = () => {
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom > 0 ? insets.bottom : 12;
+  const tabHeight = 60 + bottomInset;
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: isDark ? '#2D2D2D' : '#E5E7EB',
+          height: tabHeight,
+          paddingBottom: bottomInset + 2,
+          paddingTop: 8,
+        },
+        tabBarItemStyle: {
+          paddingBottom: 2,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: isDark ? '#9CA3AF' : '#6B7280',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
       }}
     >
       <Tab.Screen

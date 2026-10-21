@@ -5,21 +5,26 @@ import { useCartStore } from '@store/useCartStore';
 import ShopButton from '@components/ui/ShopButton';
 import { COLORS, SIZES } from '@constants/theme';
 
+import { useTheme } from '@contexts/ThemeContext';
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 
 const CartScreen = ({ navigation }: any) => {
-  const items = useCartStore(state => state.items);
-  const removeItem = useCartStore(state => state.removeItem);
-  const totalPrice = useCartStore(state => state.totalPrice());
+  const items = useCartStore((state) => state.items);
+  const removeItem = useCartStore((state) => state.removeItem);
+  const totalPrice = useCartStore((state) => state.totalPrice());
+  const { colors, isDark } = useTheme();
 
   // TRẠNG THÁI TRỐNG (Empty State) — Đừng bao giờ để người dùng nhìn màn hình trắng vô hồn
   if (items.length === 0) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🛒</Text>
-          <Text style={styles.emptyText}>Giỏ hàng của bạn đang trống trơn!</Text>
+          <Text style={[styles.emptyText, { color: colors.textLight }]}>
+            Giỏ hàng của bạn đang trống trơn!
+          </Text>
           <ShopButton
             title="Quay về mua sắm"
             onPress={() => navigation.goBack()}
@@ -31,9 +36,9 @@ const CartScreen = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Giỏ hàng của bạn</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: isDark ? '#2D2D2D' : '#E5E7EB', borderBottomWidth: 1 }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Giỏ hàng của bạn</Text>
       </View>
 
       <FlatList
@@ -41,10 +46,23 @@ const CartScreen = ({ navigation }: any) => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: SIZES.padding }}
         renderItem={({ item }) => (
-          <View style={styles.cartItem}>
+          <View
+            style={[
+              styles.cartItem,
+              {
+                backgroundColor: colors.surface,
+                borderColor: isDark ? '#333333' : '#E5E7EB',
+                borderWidth: 1,
+              },
+            ]}
+          >
             <View style={{ flex: 1 }}>
-              <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.itemPrice}>{formatCurrency(item.price)} x {item.quantity}</Text>
+              <Text style={[styles.itemName, { color: colors.text }]} numberOfLines={1}>
+                {item.name}
+              </Text>
+              <Text style={styles.itemPrice}>
+                {formatCurrency(item.price)} x {item.quantity}
+              </Text>
             </View>
             <ShopButton
               title="Xóa"
@@ -56,8 +74,16 @@ const CartScreen = ({ navigation }: any) => {
         )}
       />
 
-      <View style={styles.footer}>
-        <Text style={styles.totalLabel}>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: isDark ? '#2D2D2D' : '#E5E7EB',
+          },
+        ]}
+      >
+        <Text style={[styles.totalLabel, { color: colors.text }]}>
           Tổng cộng: <Text style={styles.totalValue}>{formatCurrency(totalPrice)}</Text>
         </Text>
         <ShopButton
