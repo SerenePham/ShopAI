@@ -12,13 +12,17 @@ export const askShopAI = async (
   question: string,
   history: ChatTurn[] = [],
 ): Promise<string> => {
-  const { data } = await axiosClient.post<{ reply: string }>('/api/ai/chat', {
-    message: question,
-    history: history.map((h) => ({
-      role: h.role,
-      text: h.parts?.[0]?.text ?? h.text ?? '',
-    })),
-  });
+  const { data } = await axiosClient.post<{ reply: string }>(
+    '/api/ai/chat',
+    {
+      message: question,
+      history: history.map((h) => ({
+        role: h.role,
+        text: h.parts?.[0]?.text ?? h.text ?? '',
+      })),
+    },
+    { timeout: 30000 }, // AI chat cần thời gian suy nghĩ, tránh bị timeout 10s mặc định
+  );
   return data.reply;
 };
 

@@ -7,36 +7,47 @@ import {
   getDistanceKm,
   getShippingTier,
 } from '@constants/shipping';
-import { COLORS, SIZES } from '@constants/theme';
+import { SIZES } from '@constants/theme';
+import { useTheme } from '@contexts/ThemeContext';
 
 const formatVnd = (value: number) => `${value.toLocaleString('vi-VN')}đ`;
 
 const LocationBadge = () => {
   const { coords, loading, error, refresh } = useCurrentLocation();
+  const { isDark } = useTheme();
 
   // --- Trạng thái 1: Đang dò GPS ---
   if (loading) {
     return (
-      <View style={styles.badge}>
-        <ActivityIndicator size="small" color={COLORS.primary} />
-        <Text style={styles.textMuted}>  Đang xác định vị trí của bạn...</Text>
+      <View style={[styles.container, isDark && styles.containerDark]}>
+        <View style={styles.leftContent}>
+          <ActivityIndicator size="small" color="#D97706" />
+          <Text style={[styles.statusText, isDark && styles.statusTextDark]}>
+            {' '}Đang dò tín hiệu GPS...
+          </Text>
+        </View>
       </View>
     );
   }
 
-  // --- Trạng thái 2: Lỗi / bị từ chối -> KHÔNG làm sập màn hình, chỉ hạ cấp trải nghiệm ---
+  // --- Trạng thái 2: Lỗi / Chưa bắt được GPS -> Hiển thị đúng câu lệnh yêu cầu ---
   if (error || !coords) {
     return (
-      <Pressable style={styles.badge} onPress={refresh}>
-        <Text style={styles.textMuted}>
-          📍 {error ?? 'Chưa rõ vị trí'} — tạm tính phí ship {formatVnd(DEFAULT_SHIPPING_FEE)}
-        </Text>
-        <Text style={styles.retry}>Thử lại</Text>
-      </Pressable>
+      <View style={[styles.container, isDark && styles.containerDark]}>
+        <View style={styles.leftContent}>
+          <Text style={styles.pinIcon}>📍</Text>
+          <Text style={[styles.statusText, isDark && styles.statusTextDark]} numberOfLines={1}>
+            Không bắt được tín hiệu GPS — tạm tính ship {formatVnd(DEFAULT_SHIPPING_FEE)}
+          </Text>
+        </View>
+        <Pressable onPress={refresh} hitSlop={8} style={styles.actionBtn}>
+          <Text style={styles.actionBtnText}>Thử lại</Text>
+        </Pressable>
+      </View>
     );
   }
 
-  // --- Trạng thái 3: Thành công -> tính khoảng cách và tra bảng giá ---
+  // --- Trạng thái 3: Đã bắt được GPS ---
   const distanceKm = getDistanceKm(
     coords.latitude,
     coords.longitude,
@@ -46,35 +57,68 @@ const LocationBadge = () => {
   const tier = getShippingTier(distanceKm);
 
   return (
-    <Pressable style={[styles.badge, styles.badgeSuccess]} onPress={refresh}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.title}>
-          📍 Cách kho {distanceKm.toFixed(1)} km · Ship {formatVnd(tier.fee)}
-        </Text>
-        <Text style={styles.subtitle}>{tier.label}</Text>
-        <Text style={styles.coords}>
-          ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
+    <View style={[styles.container, isDark && styles.containerDark]}>
+      <View style={styles.leftContent}>
+        <Text style={styles.pinIcon}>📍</Text>
+        <Text style={[styles.statusText, isDark && styles.statusTextDark]} numberOfLines={1}>
+          Cách kho {distanceKm.toFixed(1)} km — Phí ship: {formatVnd(tier.fee)}
         </Text>
       </View>
-      <Text style={styles.retry}>Làm mới</Text>
-    </Pressable>
+      <Pressable onPress={refresh} hitSlop={8} style={styles.actionBtn}>
+        <Text style={styles.actionBtnText}>Thử lại</Text>
+      </Pressable>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  badge: {
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F2',
-    paddingVertical: 10,
-    paddingHorizontal: SIZES.padding,
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF9C3', // Light yellow alert container
+    borderColor: '#FDE047',
+    borderWidth: 1,
+    borderRadius: 8,
+    marginHorizontal: SIZES.padding,
+    marginVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  badgeSuccess: { backgroundColor: '#E8F5E9' },
-  title: { fontSize: 13, fontWeight: 'bold' },
-  subtitle: { fontSize: 12, color: '#555', marginTop: 2 },
-  coords: { fontSize: 11, color: '#888', marginTop: 2 },
-  textMuted: { fontSize: 13, color: '#555', flex: 1 },
-  retry: { fontSize: 12, color: COLORS.primary, fontWeight: 'bold', marginLeft: 8 },
+  containerDark: {
+    backgroundColor: '#2D2813',
+    borderColor: '#605018',
+  },
+  leftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  pinIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#854D0E', // Dark yellow/amber text
+    flex: 1,
+    fontWeight: '500',
+  },
+  statusTextDark: {
+    color: '#FDE68A',
+  },
+  actionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#FDE047',
+    borderRadius: 6,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#713F12',
+  },
 });
 
 export default LocationBadge;

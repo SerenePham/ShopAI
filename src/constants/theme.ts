@@ -10,6 +10,7 @@ export const COLORS = {
     error: "#FF0000",
     danger: "#FF4D4F",
     success: "#52C41A",
+    white: "#FFFFFF",
   };
   
   export const SIZES = {

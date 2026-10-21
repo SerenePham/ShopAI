@@ -15,10 +15,7 @@ import { COLORS, SIZES } from "@constants/theme";
 
 // FlashList không có sẵn bản "Animated" như FlatList (react-native đã export sẵn Animated.FlatList).
 // Phải tự bọc bằng createAnimatedComponent để useAnimatedScrollHandler gắn được vào sự kiện cuộn của nó.
-const AnimatedFlashList =
-  Animated.createAnimatedComponent<
-    React.ComponentProps<typeof FlashList<Product>>
-  >(FlashList);
+const AnimatedFlashList = Animated.createAnimatedComponent(FlashList as any) as any;
 
 const HEADER_MAX_HEIGHT = 180; // Chiều cao Header lúc đầu (chưa cuộn)
 const HEADER_MIN_HEIGHT = 64; // Chiều cao Header nhỏ nhất khi đã cuộn đủ xa
@@ -79,8 +76,8 @@ export default function CollapsingHeaderDemo() {
 
       <AnimatedFlashList
         data={MOCK_PRODUCTS}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ProductCard product={item} />}
+        keyExtractor={(item: any) => item.id}
+        renderItem={({ item }: any) => <ProductCard product={item} />}
         numColumns={2}
         estimatedItemSize={260}
         onScroll={scrollHandler} // Gắn Worklet xử lý cuộn trực tiếp vào danh sách

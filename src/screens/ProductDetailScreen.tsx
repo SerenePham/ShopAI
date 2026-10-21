@@ -27,6 +27,8 @@ const fetchProductById = async (id: string): Promise<Product> => {
   return result.data;
 };
 
+import { getProductImageSource } from '@data/productImages';
+
 const ProductDetailScreen = () => {
   const route = useRoute<RouteProp<HomeStackParamList, 'ProductDetail'>>();
   const { productId } = route.params;
@@ -58,7 +60,7 @@ const ProductDetailScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri: product.image }} style={styles.image} />
+      <Image source={getProductImageSource(product)} style={styles.image} resizeMode="contain" />
       <Text style={styles.name}>{product.name}</Text>
       <Text style={styles.price}>{formatCurrency(product.price)}</Text>
       <ShopButton title="Thêm vào giỏ hàng" onPress={() => addItem(product)} />
