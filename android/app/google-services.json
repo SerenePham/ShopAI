@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "109876543210",
+    "project_id": "shopai-app-2026",
+    "storage_bucket": "shopai-app-2026.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:109876543210:android:a1b2c3d4e5f60718293a4b",
+        "android_client_info": {
+          "package_name": "com.shopai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyShopAI_Mock_ApiKey_For_Sprint10_Build"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

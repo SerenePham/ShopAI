@@ -21,7 +21,6 @@ module.exports = {
           "@contexts": "./src/contexts",
           "@api": "./src/api",
           "@utils/haptics": "./src/utils/haptics",
-          "@hooks": "./src/hooks",
         },
       },
     ],

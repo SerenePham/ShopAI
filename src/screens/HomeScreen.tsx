@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   View,
@@ -23,6 +23,7 @@ import type { CompositeScreenProps } from "@react-navigation/native";
 import { Product, ProductListSchema } from "../types/product.schema";
 import LocationBadge from "@components/ui/LocationBadge";
 import { API_BASE_URL } from "@constants/api";
+import crashlytics from "@services/crashlytics";
 import { useTheme } from "@contexts/ThemeContext";
 import { products as localFallbackProducts } from "@data/products";
 import AddToCartModal from "@components/ui/AddToCartModal";
@@ -53,33 +54,15 @@ const fetchProductsAPI = async (): Promise<Product[]> => {
       return result.data;
     }
   } catch (err) {
+    crashlytics().recordError(err as Error);
     console.log("Server NestJS offline, dùng fallback 100 sản phẩm:", (err as Error).message);
   }
   return localFallbackProducts;
 };
 
-const HomeScreen = ({ navigation, route }: Props) => {
-  const logout = useAuthStore((state) => state.logout);
-  const addItem = useCartStore((state) => state.addItem);
-  const totalQuantity = useCartStore((state) => state.totalQuantity());
-  const { colors, isDark, toggleTheme } = useTheme();
-
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Tất cả");
-  const [isServerOnline, setIsServerOnline] = useState<boolean | null>(null);
+const FlashSaleCountdown = memo(() => {
   const [timeLeft, setTimeLeft] = useState(3 * 60 + 36); // Countdown 03:36
-  const [selectedProductForBuy, setSelectedProductForBuy] = useState<Product | null>(null);
 
-  const scannedCode = route.params?.scannedCode;
-
-  // Kiểm tra sức khỏe Server NestJS
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/api/health`)
-      .then((res) => setIsServerOnline(res.ok))
-      .catch(() => setIsServerOnline(false));
-  }, []);
-
-  // Đếm ngược Flash Sale 03:36
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 3 * 60 + 36));
@@ -94,6 +77,29 @@ const HomeScreen = ({ navigation, route }: Props) => {
     const seconds = (timeLeft % 60).toString().padStart(2, "0");
     return `${minutes}:${seconds}`;
   }, [timeLeft]);
+
+  return <Text style={styles.flashSaleTimerText}>{formattedCountdown}</Text>;
+});
+
+const HomeScreen = ({ navigation, route }: Props) => {
+  const logout = useAuthStore((state) => state.logout);
+  const addItem = useCartStore((state) => state.addItem);
+  const totalQuantity = useCartStore((state) => state.totalQuantity());
+  const { colors, isDark, toggleTheme } = useTheme();
+
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("Tất cả");
+  const [isServerOnline, setIsServerOnline] = useState<boolean | null>(null);
+  const [selectedProductForBuy, setSelectedProductForBuy] = useState<Product | null>(null);
+
+  const scannedCode = route.params?.scannedCode;
+
+  // Kiểm tra sức khỏe Server NestJS
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/health`)
+      .then((res) => setIsServerOnline(res.ok))
+      .catch(() => setIsServerOnline(false));
+  }, []);
 
   const categories = [
     "Tất cả",
@@ -222,6 +228,31 @@ const HomeScreen = ({ navigation, route }: Props) => {
     return result;
   }, [allProducts, search, selectedCategory]);
 
+  const handleProductPress = useCallback((productId: string) => {
+    navigation.navigate("ProductDetail", { productId });
+  }, [navigation]);
+
+  const handleBuyPress = useCallback((prod: Product) => {
+    setSelectedProductForBuy(prod);
+  }, []);
+
+  const renderProductItem = useCallback(
+    ({ item, index }: { item: Product; index: number }) => (
+      <View
+        style={{
+          flex: 1,
+          paddingLeft: index % 2 === 0 ? SIZES.padding : 6,
+          paddingRight: index % 2 === 0 ? 6 : SIZES.padding,
+        }}
+      >
+        <Pressable onPress={() => handleProductPress(String(item.id))}>
+          <ProductCard product={item} onBuyPress={handleBuyPress} />
+        </Pressable>
+      </View>
+    ),
+    [handleProductPress, handleBuyPress]
+  );
+
   // Header cuộn tự nhiên: Flash Sale, Search, Quick Actions, Categories
   // Khi người dùng vuốt xem hàng hóa, toàn bộ phần này sẽ trượt ẩn đi mượt mà!
   const renderListHeader = () => (
@@ -343,7 +374,7 @@ const HomeScreen = ({ navigation, route }: Props) => {
         </View>
         <View style={styles.flashSaleTimerCard}>
           <Text style={styles.flashSaleTimerLabel}>Kết thúc trong</Text>
-          <Text style={styles.flashSaleTimerText}>{formattedCountdown}</Text>
+          <FlashSaleCountdown />
         </View>
       </View>
 
@@ -491,33 +522,35 @@ const HomeScreen = ({ navigation, route }: Props) => {
         <FlashList
           data={filteredProducts}
           keyExtractor={(item) => String(item.id)}
+          estimatedItemSize={260}
           ListHeaderComponent={renderListHeader}
-          renderItem={({ item, index }) => (
-            <View
-              style={{
-                flex: 1,
-                paddingLeft: index % 2 === 0 ? SIZES.padding : 6,
-                paddingRight: index % 2 === 0 ? 6 : SIZES.padding,
-              }}
-            >
-              <Pressable
-                onPress={() =>
-                  navigation.navigate("ProductDetail", {
-                    productId: String(item.id),
-                  })
-                }
-              >
-                <ProductCard
-                  product={item}
-                  onBuyPress={(prod) => setSelectedProductForBuy(prod)}
-                />
-              </Pressable>
-            </View>
-          )}
+          renderItem={renderProductItem}
           numColumns={2}
           contentContainerStyle={{ paddingBottom: 24 }}
           refreshing={isRefetching}
           onRefresh={refetch}
+          ListFooterComponent={
+            __DEV__ ? (
+              <Pressable
+                onLongPress={() => {
+                  crashlytics().log("Dev nhấn giữ vào version text để test crash...");
+                  crashlytics().setUserId("dev_tester_999");
+                  crashlytics().crash();
+                }}
+                style={{ padding: 16, alignItems: "center" }}
+              >
+                <Text
+                  style={{
+                    textAlign: "center",
+                    fontSize: 11,
+                    color: isDark ? "#777777" : "#999999",
+                  }}
+                >
+                  ShopAI v1.0.0 (Dev: nhấn giữ 2s để test Crashlytics)
+                </Text>
+              </Pressable>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={{ padding: 40, alignItems: "center" }}>
               <Text style={{ color: colors.textLight, fontSize: 14 }}>

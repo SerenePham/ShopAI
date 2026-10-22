@@ -8,6 +8,8 @@ import { useCartStore, CartItem } from '@store/useCartStore';
 import { COLORS, SIZES } from '@constants/theme';
 import { formatCurrency } from '@utils/formatCurrency';
 import axiosClient from '@api/axiosClient';
+import crashlytics from '@services/crashlytics';
+import { APP_ENV, API_BASE_URL } from '@constants/env';
 
 type CreateOrderResponse = { id: string; status: string; total: number; createdAt: string };
 
@@ -35,14 +37,35 @@ const CheckoutScreen = () => {
   const handleConfirm = async () => {
     setIsPlacing(true);
     setErrorMessage(null);
+
+    // ➕ Breadcrumb: rắc vụn bánh mì TRƯỚC khi làm việc nguy hiểm
+    crashlytics().log(`Checkout: bắt đầu đặt hàng, ${items.length} loại sản phẩm`);
+
+    // ➕ Custom Keys: gắn bối cảnh vào MỌI báo cáo phát sinh từ đây trở đi
+    crashlytics().setAttributes({
+      screen: 'CheckoutScreen',
+      cart_item_count: String(items.length),
+      cart_total: String(totalPrice),
+      app_env: APP_ENV,
+      api_base_url: API_BASE_URL,
+    });
+
     try {
       const order = await placeOrderAPI(items, totalPrice);
+
+      crashlytics().log(`Checkout: đặt hàng THÀNH CÔNG, orderId = ${order.id}`);
       setOrderId(order.id);
       setIsDone(true);
       clearCart();
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       setTimeout(() => navigation.goBack(), 1500);
     } catch (error: any) {
+      const err = error instanceof Error ? error : new Error(String(error?.response?.data?.message || error?.message || 'Đặt hàng thất bại'));
+
+      // ➕ Ghi nhận Non-Fatal: App không sập, nhưng đội kỹ thuật biết ngay đơn hàng thất bại
+      crashlytics().log(`Checkout: đặt hàng THẤT BẠI - ${err.message}`);
+      crashlytics().recordError(err, 'CheckoutOrderFailed');
+
       const serverMessage = error?.response?.data?.message;
       const message = Array.isArray(serverMessage)
         ? serverMessage.join(', ')

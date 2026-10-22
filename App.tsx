@@ -11,6 +11,8 @@ import RegisterScreen from "@screens/RegisterScreen";
 import RootStackNavigator from "@navigation/RootStackNavigator";
 import BiometricGateScreen from "@screens/BiometricGateScreen";
 import { useAppLock } from "@hooks/useAppLock";
+import crashlytics from "@services/crashlytics";
+import * as Updates from "expo-updates";
 
 // Stack cho luồng Auth — luồng Main do RootStackNavigator (bọc MainTabNavigator + Modal Checkout) đảm nhiệm
 const AuthStack = createNativeStackNavigator();
@@ -50,6 +52,28 @@ function App(): React.JSX.Element {
 
   // Cổng sinh trắc học: false = đang khoá, true = đã mở
   const [isUnlocked, setIsUnlocked] = useState(false);
+
+  // Sprint 10 (Bước 2): Ghi log khởi động Crashlytics — không ảnh hưởng UI/Navigation
+  useEffect(() => {
+    crashlytics().log("App ShopAI đã khởi động.");
+  }, []);
+
+  // Sprint 10 (Bước 6): Kiểm tra bản vá OTA mỗi khi App khởi động — không ảnh hưởng Navigation/Zustand/Query
+  useEffect(() => {
+    async function checkForUpdate() {
+      if (__DEV__) return; // Không kiểm tra update khi đang chạy Dev — tránh nhiễu lúc code
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync(); // Tải xong, khởi động lại App ngay với bản mới
+        }
+      } catch (error) {
+        crashlytics().recordError(error as Error); // Lỗi kiểm tra update cũng là Non-Fatal — ghi nhận về Firebase
+      }
+    }
+    checkForUpdate();
+  }, []);
 
   useEffect(() => {
     checkLocalToken(); // Móc vào ổ cứng SecureStore ngay khi App vừa khởi chạy

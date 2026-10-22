@@ -1,27 +1,39 @@
 package com.shopai
 
 import android.app.Application
+import android.content.res.Configuration
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
-import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.facebook.react.common.build.ReactBuildConfig
+import expo.modules.ApplicationLifecycleDispatcher
+import expo.modules.ExpoReactHostFactory
+import expo.modules.updates.UpdatesController
 
 class MainApplication : Application(), ReactApplication {
 
   override val reactHost: ReactHost by lazy {
-    getDefaultReactHost(
+    ExpoReactHostFactory.getDefaultReactHost(
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
         },
+      jsMainModulePath = "index",
     )
   }
 
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+    ApplicationLifecycleDispatcher.onApplicationCreate(this)
+    UpdatesController.initialize(this, ReactBuildConfig.DEBUG)
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig)
   }
 }
