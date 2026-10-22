@@ -29,6 +29,7 @@ import crashlytics from "@services/crashlytics";
 import { useTheme } from "@contexts/ThemeContext";
 import { products as localFallbackProducts } from "@data/products";
 import AddToCartModal from "@components/ui/AddToCartModal";
+import { hapticSuccess } from "@utils/haptics";
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<HomeStackParamList, "Home">,
@@ -100,6 +101,7 @@ const FlashSaleCountdown = memo(() => {
 interface HomeListHeaderProps {
   search: string;
   onSearchChange: (text: string) => void;
+  onSubmitSearch?: () => void;
   selectedCategory: string;
   onSelectCategory: (cat: string) => void;
   totalQuantity: number;
@@ -115,6 +117,7 @@ const HomeListHeader = memo(
   ({
     search,
     onSearchChange,
+    onSubmitSearch,
     selectedCategory,
     onSelectCategory,
     totalQuantity,
@@ -238,11 +241,14 @@ const HomeListHeader = memo(
               },
             ]}
           >
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Pressable onPress={onSubmitSearch} hitSlop={8}>
+              <Text style={styles.searchIcon}>🔍</Text>
+            </Pressable>
             <TextInput
               value={search}
               onChangeText={onSearchChange}
-              placeholder="Tìm kiếm điện thoại, tai nghe, đồng hồ..."
+              onSubmitEditing={onSubmitSearch}
+              placeholder="Tìm tên hoặc mã chính xác (vd: #3%, #3!)..."
               placeholderTextColor={isDark ? "#888888" : "#9CA3AF"}
               style={[styles.searchInput, { color: colors.text }]}
               autoCorrect={false}
@@ -373,36 +379,123 @@ const HomeScreen = ({ navigation, route }: Props) => {
     ? localFallbackProducts
     : productsData ?? [];
 
-  // Xử lý khi quét mã QR/Barcode
+  // Hàm xử lý tìm kiếm chính xác và mở chi tiết sản phẩm lập tức
+  const navigateToProductById = useCallback(
+    (targetId: string) => {
+      const cleanTarget = targetId.toLowerCase().trim();
+      const matched = allProducts.find((p) => {
+        const prodId = String(p.id).toLowerCase();
+        const cleanProdId = prodId.replace("backend_prod_", "");
+        return prodId === cleanTarget || cleanProdId === cleanTarget;
+      });
+
+      hapticSuccess();
+      setSearch("");
+      navigation.navigate("ProductDetail", {
+        productId: String(matched ? matched.id : targetId),
+      });
+    },
+    [allProducts, navigation]
+  );
+
+  // Xử lý khi quét mã QR/Barcode: nếu quét ra mã chính xác dạng #3% hoặc #3! thì vào thẳng chi tiết
   useEffect(() => {
     if (scannedCode) {
       const codeStr = String(scannedCode).trim();
-      const matched = allProducts.find(
-        (p) =>
-          String(p.id) === codeStr ||
-          String(p.id).replace("backend_prod_", "") === codeStr.replace("backend_prod_", "")
-      );
+      const exactMatch = codeStr.match(/^#([a-zA-Z0-9_-]+)[%!]?$/i);
+      const urlMatch = codeStr.match(/product\/([a-zA-Z0-9_-]+)/i);
 
-      if (matched) {
-        navigation.navigate("ProductDetail", {
-          productId: String(matched.id),
-        });
+      if (exactMatch) {
+        navigateToProductById(exactMatch[1]);
+      } else if (urlMatch) {
+        navigateToProductById(urlMatch[1]);
       } else {
-        setSearch(codeStr);
+        const matched = allProducts.find(
+          (p) =>
+            String(p.id) === codeStr ||
+            String(p.id).replace("backend_prod_", "") === codeStr.replace("backend_prod_", "")
+        );
+
+        if (matched) {
+          navigateToProductById(String(matched.id));
+        } else {
+          setSearch(codeStr);
+        }
       }
 
       navigation.setParams({ scannedCode: undefined } as any);
     }
-  }, [scannedCode, allProducts, navigation]);
+  }, [scannedCode, allProducts, navigation, navigateToProductById]);
+
+  // Xử lý khi gõ trên thanh tìm kiếm: nếu gõ đúng cú pháp chính xác dạng #3% hoặc #3! thì mở chi tiết luôn
+  const handleSearchChange = useCallback(
+    (text: string) => {
+      setSearch(text);
+
+      const trimmed = text.trim();
+      const exactMatch = trimmed.match(/^#([a-zA-Z0-9_-]+)[%!]$/i);
+      if (exactMatch) {
+        navigateToProductById(exactMatch[1]);
+      }
+    },
+    [navigateToProductById]
+  );
+
+  // Xử lý khi nhấn Enter trên bàn phím hoặc nhấn icon kính lúp
+  const handleSearchSubmit = useCallback(() => {
+    const trimmed = search.trim();
+    if (!trimmed) return;
+
+    const match = trimmed.match(/^#([a-zA-Z0-9_-]+)[%!]?$/i);
+    if (match) {
+      navigateToProductById(match[1]);
+    }
+  }, [search, navigateToProductById]);
 
   const filteredProducts = useMemo(() => {
     let result = allProducts;
 
     if (search.trim()) {
-      const keyword = search.toLowerCase().trim();
-      result = result.filter((product) =>
-        product.name.toLowerCase().includes(keyword)
-      );
+      const trimmed = search.trim();
+      const isIdSearch = trimmed.startsWith("#");
+      const cleanSearch = trimmed.toLowerCase();
+
+      if (isIdSearch) {
+        // Tìm kiếm chính xác / theo đầu mã ID khi có tiền tố '#' (ví dụ: #2, #34, #100)
+        const rawId = trimmed.replace(/^#\s*/, "").toLowerCase();
+
+        result = result
+          .filter((product) => {
+            const prodId = String(product.id).toLowerCase();
+            const cleanProdId = prodId.replace("backend_prod_", "");
+            return (
+              prodId === rawId ||
+              cleanProdId === rawId ||
+              cleanProdId.startsWith(rawId) ||
+              prodId.includes(rawId)
+            );
+          })
+          .sort((a, b) => {
+            // Đưa sản phẩm khớp ID chính xác nhất lên đầu danh sách
+            const aClean = String(a.id).toLowerCase().replace("backend_prod_", "");
+            const bClean = String(b.id).toLowerCase().replace("backend_prod_", "");
+            if (aClean === rawId) return -1;
+            if (bClean === rawId) return 1;
+            return 0;
+          });
+      } else {
+        // Tìm kiếm thông thường: khớp theo Tên HOẶC khớp trực tiếp theo ID sản phẩm
+        result = result.filter((product) => {
+          const nameMatch = product.name.toLowerCase().includes(cleanSearch);
+          const prodId = String(product.id).toLowerCase();
+          const cleanProdId = prodId.replace("backend_prod_", "");
+          const idMatch =
+            prodId === cleanSearch ||
+            cleanProdId === cleanSearch;
+
+          return nameMatch || idMatch;
+        });
+      }
     }
 
     if (selectedCategory !== "Tất cả") {
@@ -620,7 +713,8 @@ const HomeScreen = ({ navigation, route }: Props) => {
     () => (
       <HomeListHeader
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={handleSearchChange}
+        onSubmitSearch={handleSearchSubmit}
         selectedCategory={selectedCategory}
         onSelectCategory={setSelectedCategory}
         totalQuantity={totalQuantity}
@@ -637,6 +731,8 @@ const HomeScreen = ({ navigation, route }: Props) => {
     ),
     [
       search,
+      handleSearchChange,
+      handleSearchSubmit,
       selectedCategory,
       totalQuantity,
       filteredProducts.length,

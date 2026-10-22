@@ -78,8 +78,26 @@ const ScannerScreen = ({ navigation }: any) => {
       // Đặt NGAY SAU khi đóng khóa, TRƯỚC khi navigate — để cảm giác tức thời nhất.
       hapticSuccess();
 
-      // Quét xong, bắn dữ liệu về HomeScreen (navigate sẽ tự unmount màn hình này)
-      navigation.navigate('Home', { scannedCode: value });
+      const rawCode = value.trim();
+
+      // 1. Kiểm tra cú pháp tìm chính xác dạng #3% hoặc #3!
+      const exactCodeMatch = rawCode.match(/^#([a-zA-Z0-9_-]+)[%!]$/i);
+      if (exactCodeMatch) {
+        const targetId = exactCodeMatch[1];
+        // Điều hướng thẳng vào chi tiết sản phẩm thay vì qua danh mục
+        navigation.replace('ProductDetail', { productId: targetId });
+        return;
+      }
+
+      // 2. Kiểm tra nếu là đường dẫn Deep Link (shopai://product/:id)
+      const deepLinkMatch = rawCode.match(/product\/([a-zA-Z0-9_-]+)/i);
+      if (deepLinkMatch) {
+        navigation.replace('ProductDetail', { productId: deepLinkMatch[1] });
+        return;
+      }
+
+      // 3. Quét xong các mã khác, bắn dữ liệu về HomeScreen để lọc
+      navigation.navigate('Home', { scannedCode: rawCode });
     },
   });
 

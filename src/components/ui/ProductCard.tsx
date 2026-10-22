@@ -19,6 +19,7 @@ const ProductCard = ({ product, onBuyPress }: Props) => {
   const addItem = useCartStore((state) => state.addItem);
   const { colors, isDark } = useTheme();
   const imageSource = getProductImageSource(product);
+  const cleanId = String(product.id).replace('backend_prod_', '');
 
   const handleBuy = () => {
     if (onBuyPress) {
@@ -31,6 +32,9 @@ const ProductCard = ({ product, onBuyPress }: Props) => {
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333333' : '#E5E7EB' }]}>
       <View style={[styles.imageContainer, { backgroundColor: isDark ? '#262626' : '#F9FAFB' }]}>
+        <View style={styles.idBadge}>
+          <Text style={styles.idBadgeText}>#{cleanId}</Text>
+        </View>
         <Image source={imageSource} style={styles.image} resizeMode="contain" />
       </View>
       <View style={styles.infoContainer}>
@@ -72,6 +76,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
+    position: 'relative',
+  },
+
+  idBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    zIndex: 10,
+  },
+
+  idBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
 
   image: {
