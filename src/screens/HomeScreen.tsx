@@ -9,6 +9,7 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
@@ -348,18 +349,48 @@ const HomeScreen = ({ navigation, route }: Props) => {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
   const [isServerOnline, setIsServerOnline] = useState<boolean | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [selectedProductForBuy, setSelectedProductForBuy] = useState<Product | null>(null);
   const [useOfflineFallback, setUseOfflineFallback] = useState(false);
 
   const scannedCode = route.params?.scannedCode;
 
-  // Kiểm tra sức khỏe Server NestJS
-  useEffect(() => {
-    axiosClient
-      .get("/api/health", { timeout: 3000 })
-      .then((res) => setIsServerOnline(res.status === 200))
-      .catch(() => setIsServerOnline(false));
+  // Kiểm tra kết nối thời gian thực tới Server NestJS
+  const checkServerHealth = useCallback(async () => {
+    try {
+      const res = await axiosClient.get("/api/health", { timeout: 2000 });
+      if (res.status === 200) {
+        setIsServerOnline(true);
+        return true;
+      } else {
+        setIsServerOnline(false);
+        return false;
+      }
+    } catch {
+      setIsServerOnline(false);
+      return false;
+    }
   }, []);
+
+  // Heartbeat định kỳ mỗi 3.5 giây kiểm tra kết nối để nhận diện ngay khi tắt wifi hoặc tắt server
+  useEffect(() => {
+    checkServerHealth();
+
+    const interval = setInterval(() => {
+      checkServerHealth();
+    }, 3500);
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        checkServerHealth();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [checkServerHealth]);
 
   const {
     data: productsData,
@@ -373,6 +404,24 @@ const HomeScreen = ({ navigation, route }: Props) => {
     queryFn: fetchProductsAPI,
     retry: 1, // Chỉ thử lại 1 lần để báo lỗi nhanh chóng (dưới 5s) khi mất mạng
   });
+
+  // Xử lý thử kết nối lại
+  const handleRetryConnection = useCallback(async () => {
+    setIsRetrying(true);
+    const online = await checkServerHealth();
+    if (online) {
+      await refetch();
+    }
+    setIsRetrying(false);
+  }, [checkServerHealth, refetch]);
+
+  // Xử lý kéo xuống làm mới
+  const handleRefresh = useCallback(async () => {
+    const online = await checkServerHealth();
+    if (online) {
+      await refetch();
+    }
+  }, [checkServerHealth, refetch]);
 
   // Nếu người dùng chọn dùng offline fallback hoặc có dữ liệu server
   const allProducts = useOfflineFallback
@@ -725,7 +774,7 @@ const HomeScreen = ({ navigation, route }: Props) => {
         isOfflineFallback={useOfflineFallback}
         onRetryServer={() => {
           setUseOfflineFallback(false);
-          refetch();
+          handleRetryConnection();
         }}
       />
     ),
@@ -740,12 +789,18 @@ const HomeScreen = ({ navigation, route }: Props) => {
       colors,
       isDark,
       useOfflineFallback,
-      refetch,
+      handleRetryConnection,
     ]
   );
 
-  // 1. Màn hình BÁO LỖI MẠNG khi mất mạng/server tắt (không quay loading hoài)
-  if (isError && allProducts.length === 0 && !useOfflineFallback) {
+  // Nhận diện mất kết nối thời gian thực:
+  // Kể cả khi vừa mở app hoặc đang dùng bình thường mà tắt wifi hay tắt server
+  const isNetworkLost =
+    isServerOnline === false ||
+    (isError && (!allProducts || allProducts.length === 0));
+
+  // 1. Màn hình BÁO LỖI MẠNG khi mất mạng/server tắt (hoạt động tức thì theo thời gian thực)
+  if (isNetworkLost && !useOfflineFallback) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -768,22 +823,22 @@ const HomeScreen = ({ navigation, route }: Props) => {
               <Text style={[styles.errorSubtitle, { color: colors.textLight }]}>
                 {error instanceof Error
                   ? error.message
-                  : "Vui lòng kiểm tra lại kết nối Wi-Fi/4G hoặc đảm bảo Server NestJS đang hoạt động."}
+                  : "Mất kết nối mạng hoặc máy chủ Backend NestJS đã tắt. Vui lòng kiểm tra lại Wi-Fi/4G hoặc đảm bảo Server đang hoạt động."}
               </Text>
 
               {/* Nút Thử lại */}
               <Pressable
-                style={[styles.retryBtn, { opacity: isRefetching ? 0.7 : 1 }]}
-                onPress={() => refetch()}
-                disabled={isRefetching}
+                style={[styles.retryBtn, { opacity: (isRefetching || isRetrying) ? 0.7 : 1 }]}
+                onPress={handleRetryConnection}
+                disabled={isRefetching || isRetrying}
               >
-                {isRefetching ? (
+                {(isRefetching || isRetrying) ? (
                   <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
                 ) : (
                   <Text style={{ fontSize: 16, marginRight: 6 }}>🔄</Text>
                 )}
                 <Text style={styles.retryBtnText}>
-                  {isRefetching ? "Đang kết nối lại..." : "Thử kết nối lại"}
+                  {(isRefetching || isRetrying) ? "Đang kết nối lại..." : "Thử kết nối lại"}
                 </Text>
               </Pressable>
 
@@ -807,7 +862,7 @@ const HomeScreen = ({ navigation, route }: Props) => {
   }
 
   // 2. Màn hình Loading lần đầu kết nối (tối đa 5s là có phản hồi, không treo vô tận)
-  if (isLoading && allProducts.length === 0 && !useOfflineFallback) {
+  if (isLoading && isServerOnline === null && !useOfflineFallback) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -837,8 +892,8 @@ const HomeScreen = ({ navigation, route }: Props) => {
           renderItem={renderProductItem}
           numColumns={2}
           contentContainerStyle={{ paddingBottom: 24 }}
-          refreshing={isRefetching}
-          onRefresh={refetch}
+          refreshing={isRefetching || isRetrying}
+          onRefresh={handleRefresh}
           ListFooterComponent={
             __DEV__ ? (
               <Pressable
