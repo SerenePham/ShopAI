@@ -575,7 +575,6 @@ const HomeScreen = ({ navigation, route }: Props) => {
         <FlashList
           data={filteredProducts}
           keyExtractor={(item) => String(item.id)}
-          estimatedItemSize={260}
           ListHeaderComponent={renderListHeader}
           renderItem={renderProductItem}
           numColumns={2}
