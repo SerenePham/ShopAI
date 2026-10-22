@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
@@ -253,6 +254,47 @@ const HomeScreen = ({ navigation, route }: Props) => {
     [handleProductPress, handleBuyPress]
   );
 
+  const handleTestCrash = useCallback(() => {
+    Alert.alert(
+      "⚡ Test Firebase Crashlytics",
+      "Chọn hành vi bạn muốn kiểm tra trên Firebase Console:",
+      [
+        { text: "Đóng", style: "cancel" },
+        {
+          text: "Gửi lỗi Non-Fatal",
+          onPress: () => {
+            crashlytics().log("Dev test ghi nhận lỗi Non-Fatal từ HomeScreen");
+            crashlytics().setUserId("dev_tester_999");
+            crashlytics().recordError(
+              new Error("Lỗi thử nghiệm Non-Fatal (Manual Test Error)"),
+              "ManualTestError"
+            );
+            Alert.alert(
+              "✅ Đã ghi nhận",
+              "Báo cáo lỗi Non-Fatal đã được gửi về Firebase Crashlytics!"
+            );
+          },
+        },
+        {
+          text: "💥 Sập App (Crash)",
+          style: "destructive",
+          onPress: () => {
+            crashlytics().log("Dev nhấn giữ vào version text để test crash...");
+            crashlytics().setUserId("dev_tester_999");
+            try {
+              crashlytics().crash();
+            } catch (e) {
+              console.warn("Native crash failed:", e);
+            }
+            setTimeout(() => {
+              throw new Error("Crashlytics Intentional Crash Test");
+            }, 50);
+          },
+        },
+      ]
+    );
+  }, []);
+
   // Header cuộn tự nhiên: Flash Sale, Search, Quick Actions, Categories
   // Khi người dùng vuốt xem hàng hóa, toàn bộ phần này sẽ trượt ẩn đi mượt mà!
   const renderListHeader = () => (
@@ -489,13 +531,17 @@ const HomeScreen = ({ navigation, route }: Props) => {
                 { backgroundColor: isDark ? "#333333" : "#F3F4F6" },
               ]}
             >
+              <Text style={{ fontSize: 13, marginRight: 4 }}>
+                {isDark ? "☀️" : "🌙"}
+              </Text>
               <Text
                 style={[
                   styles.pillBtnText,
                   { color: isDark ? "#FFFFFF" : "#374151" },
                 ]}
+                numberOfLines={1}
               >
-                {isDark ? "☀️ Sáng" : "🌙 Tối"}
+                {isDark ? "Sáng" : "Tối"}
               </Text>
             </Pressable>
 
@@ -511,8 +557,15 @@ const HomeScreen = ({ navigation, route }: Props) => {
                 },
               ]}
             >
-              <Text style={[styles.pillBtnText, { color: "#EF4444" }]}>
-                🚪 Thoát
+              <Text style={{ fontSize: 13, marginRight: 4 }}>🚪</Text>
+              <Text
+                style={[
+                  styles.pillBtnText,
+                  { color: "#EF4444" },
+                ]}
+                numberOfLines={1}
+              >
+                Thoát
               </Text>
             </Pressable>
           </View>
@@ -532,11 +585,8 @@ const HomeScreen = ({ navigation, route }: Props) => {
           ListFooterComponent={
             __DEV__ ? (
               <Pressable
-                onLongPress={() => {
-                  crashlytics().log("Dev nhấn giữ vào version text để test crash...");
-                  crashlytics().setUserId("dev_tester_999");
-                  crashlytics().crash();
-                }}
+                onPress={handleTestCrash}
+                onLongPress={handleTestCrash}
                 style={{ padding: 16, alignItems: "center" }}
               >
                 <Text
@@ -546,7 +596,7 @@ const HomeScreen = ({ navigation, route }: Props) => {
                     color: isDark ? "#777777" : "#999999",
                   }}
                 >
-                  ShopAI v1.0.0 (Dev: nhấn giữ 2s để test Crashlytics)
+                  ShopAI v1.0.0 (Dev: nhấn vào để test Crashlytics)
                 </Text>
               </Pressable>
             ) : null
@@ -609,10 +659,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     alignItems: "center",
+    flexShrink: 0,
   },
   pillBtn: {
+    flexDirection: "row",
     borderRadius: 20,
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
@@ -620,6 +672,7 @@ const styles = StyleSheet.create({
   pillBtnText: {
     fontSize: 12,
     fontWeight: "700",
+    includeFontPadding: false,
   },
 
   // Scanned Code Banner
