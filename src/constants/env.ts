@@ -9,8 +9,8 @@ export const APP_ENV: AppEnv = __DEV__ ? 'development' : 'production';
 const API_URLS: Record<AppEnv, string> = {
   // IP LAN máy tính hiện tại đang chạy NestJS backend
   development: 'http://192.168.1.81:3000',
-  staging: 'https://staging-api.shopai.com',
-  production: 'https://api.shopai.com',
+  staging: 'http://192.168.1.81:3000',
+  production: 'http://192.168.1.81:3000', // Trỏ IP LAN máy tính để bản Release cài trên máy thật kết nối được Server
 };
 
 export const API_BASE_URL = API_URLS[APP_ENV];
