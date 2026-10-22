@@ -24,6 +24,7 @@ import type { CompositeScreenProps } from "@react-navigation/native";
 import { Product, ProductListSchema } from "../types/product.schema";
 import LocationBadge from "@components/ui/LocationBadge";
 import { API_BASE_URL } from "@constants/api";
+import axiosClient from "@api/axiosClient";
 import crashlytics from "@services/crashlytics";
 import { useTheme } from "@contexts/ThemeContext";
 import { products as localFallbackProducts } from "@data/products";
@@ -34,31 +35,43 @@ type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList>
 >;
 
-const API_URL = `${API_BASE_URL}/api/products`;
+const CATEGORIES = [
+  "Tất cả",
+  "Tai nghe",
+  "Bàn phím",
+  "Chuột",
+  "Laptop",
+  "Tablet",
+  "Màn hình",
+  "TV",
+  "Điện thoại",
+  "Đồng hồ",
+];
 
 const fetchProductsAPI = async (): Promise<Product[]> => {
   try {
-    const response = await fetch(API_URL);
-    if (!response.ok) {
-      throw new Error("Lỗi mạng từ Server NestJS");
-    }
-    const rawData = await response.json();
-    const result = ProductListSchema.safeParse(rawData);
+    const response = await axiosClient.get<Product[]>("/api/products", {
+      timeout: 5000, // Timeout 5 giây để phát hiện mất mạng/server tắt nhanh chóng
+    });
+    const result = ProductListSchema.safeParse(response.data);
     if (!result.success) {
       console.error(
         "❌ Zod kiểm tra dữ liệu Server NestJS:",
         result.error.format()
       );
-      throw new Error("Dữ liệu sản phẩm không đúng schema!");
+      throw new Error("Dữ liệu sản phẩm trả về từ máy chủ không đúng định dạng!");
     }
-    if (result.data.length > 0) {
-      return result.data;
+    return result.data;
+  } catch (err: any) {
+    crashlytics().recordError(err);
+    if (err.code === "ECONNABORTED" || err.message?.includes("timeout")) {
+      throw new Error("Kết nối quá thời gian chờ (Timeout). Vui lòng kiểm tra lại mạng!");
     }
-  } catch (err) {
-    crashlytics().recordError(err as Error);
-    console.log("Server NestJS offline, dùng fallback 100 sản phẩm:", (err as Error).message);
+    if (err.response) {
+      throw new Error(`Máy chủ phản hồi lỗi: HTTP ${err.response.status}`);
+    }
+    throw new Error("Không thể kết nối đến máy chủ. Vui lòng kiểm tra Wi-Fi/4G hoặc Server!");
   }
-  return localFallbackProducts;
 };
 
 const FlashSaleCountdown = memo(() => {
@@ -82,6 +95,244 @@ const FlashSaleCountdown = memo(() => {
   return <Text style={styles.flashSaleTimerText}>{formattedCountdown}</Text>;
 });
 
+// Component Header của danh sách được tách ra ngoài độc lập và bọc memo
+// Đảm bảo không bị unmount khi gõ phím -> Sửa triệt để lỗi bàn phím tự thụt xuống!
+interface HomeListHeaderProps {
+  search: string;
+  onSearchChange: (text: string) => void;
+  selectedCategory: string;
+  onSelectCategory: (cat: string) => void;
+  totalQuantity: number;
+  filteredCount: number;
+  navigation: any;
+  colors: any;
+  isDark: boolean;
+  isOfflineFallback: boolean;
+  onRetryServer: () => void;
+}
+
+const HomeListHeader = memo(
+  ({
+    search,
+    onSearchChange,
+    selectedCategory,
+    onSelectCategory,
+    totalQuantity,
+    filteredCount,
+    navigation,
+    colors,
+    isDark,
+    isOfflineFallback,
+    onRetryServer,
+  }: HomeListHeaderProps) => {
+    return (
+      <View>
+        {/* Banner cảnh báo đang ở chế độ ngoại tuyến */}
+        {isOfflineFallback && (
+          <Pressable
+            style={[
+              styles.offlineBanner,
+              { backgroundColor: isDark ? "#451A03" : "#FEF3C7", borderColor: "#F59E0B" },
+            ]}
+            onPress={onRetryServer}
+          >
+            <Text style={{ fontSize: 13, marginRight: 6 }}>📦</Text>
+            <Text
+              style={[
+                styles.offlineBannerText,
+                { color: isDark ? "#FCD34D" : "#B45309" },
+              ]}
+              numberOfLines={1}
+            >
+              Đang xem danh mục ngoại tuyến. Nhấn để kết nối lại server.
+            </Text>
+          </Pressable>
+        )}
+
+        {/* Location / Shipping Banner */}
+        <LocationBadge />
+
+        {/* Quick Action Buttons */}
+        <View style={styles.quickActionsContainer}>
+          {/* Cart Button */}
+          <Pressable
+            style={[styles.quickBtn, styles.cartBtn]}
+            onPress={() => navigation.navigate("Cart")}
+          >
+            <View style={styles.quickBtnRow}>
+              <Text style={styles.quickBtnEmoji}>🛒</Text>
+              <Text style={styles.cartBtnText} numberOfLines={1}>
+                Giỏ ({totalQuantity})
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* AI Assistant Button */}
+          <Pressable
+            style={[styles.quickBtn, styles.aiBtn]}
+            onPress={() => navigation.navigate("AIChat")}
+          >
+            <View style={styles.quickBtnRow}>
+              <Text style={styles.quickBtnEmoji}>🤖</Text>
+              <Text style={styles.aiBtnText} numberOfLines={1}>
+                Hỏi AI
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Scan Button */}
+          <Pressable
+            style={[
+              styles.quickBtn,
+              styles.outlineBtn,
+              isDark && styles.outlineBtnDark,
+            ]}
+            onPress={() => navigation.navigate("Scanner")}
+          >
+            <View style={styles.quickBtnRow}>
+              <Text style={styles.quickBtnEmoji}>📷</Text>
+              <Text
+                style={[
+                  styles.outlineBtnText,
+                  isDark && { color: "#FFFFFF" },
+                ]}
+                numberOfLines={1}
+              >
+                Quét mã
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Order Tracking Button */}
+          <Pressable
+            style={[
+              styles.quickBtn,
+              styles.outlineBtn,
+              isDark && styles.outlineBtnDark,
+            ]}
+            onPress={() => navigation.navigate("Orders")}
+          >
+            <View style={styles.quickBtnRow}>
+              <Text style={styles.quickBtnEmoji}>🚚</Text>
+              <Text
+                style={[
+                  styles.outlineBtnText,
+                  isDark && { color: "#FFFFFF" },
+                ]}
+                numberOfLines={1}
+              >
+                Đơn hàng
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Search Bar - Giữ focus ổn định tuyệt đối */}
+        <View style={styles.searchSection}>
+          <View
+            style={[
+              styles.searchContainer,
+              {
+                backgroundColor: isDark ? "#262626" : "#F3F4F6",
+                borderColor: isDark ? "#404040" : "#E5E7EB",
+              },
+            ]}
+          >
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              value={search}
+              onChangeText={onSearchChange}
+              placeholder="Tìm kiếm điện thoại, tai nghe, đồng hồ..."
+              placeholderTextColor={isDark ? "#888888" : "#9CA3AF"}
+              style={[styles.searchInput, { color: colors.text }]}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => onSearchChange("")} hitSlop={10}>
+                <Text style={{ color: "#9CA3AF", fontSize: 16, paddingHorizontal: 4 }}>
+                  ✕
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* Flash Sale Banner */}
+        <View style={styles.flashSaleBanner}>
+          <View style={styles.flashSaleLeft}>
+            <Text style={styles.flashSaleHeading}>⚡ FLASH SALE HÔM NAY</Text>
+            <Text style={styles.flashSaleSubtitle}>
+              Giảm đến 50% khi thanh toán qua ShopAI
+            </Text>
+          </View>
+          <View style={styles.flashSaleTimerCard}>
+            <Text style={styles.flashSaleTimerLabel}>Kết thúc trong</Text>
+            <FlashSaleCountdown />
+          </View>
+        </View>
+
+        {/* Categories Horizontal Bar */}
+        <View
+          style={[styles.categoryWrapper, { backgroundColor: colors.background }]}
+        >
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryContainer}
+          >
+            {CATEGORIES.map((category) => {
+              const active = selectedCategory === category;
+              return (
+                <Pressable
+                  key={category}
+                  onPress={() => onSelectCategory(category)}
+                  style={[
+                    styles.categoryButton,
+                    {
+                      backgroundColor: active
+                        ? "#FF5733"
+                        : isDark
+                        ? "#262626"
+                        : "#EEEEEE",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      {
+                        color: active
+                          ? "#FFFFFF"
+                          : isDark
+                          ? "#CCCCCC"
+                          : "#555555",
+                        fontWeight: active ? "700" : "500",
+                      },
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Tiêu đề danh mục hàng hóa */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionTitleText, { color: colors.text }]}>
+            {selectedCategory === "Tất cả" ? "🔥 Tất cả sản phẩm" : `📱 ${selectedCategory}`}
+          </Text>
+          <Text style={[styles.sectionCountText, { color: colors.textLight }]}>
+            ({filteredCount} món)
+          </Text>
+        </View>
+      </View>
+    );
+  }
+);
+
 const HomeScreen = ({ navigation, route }: Props) => {
   const logout = useAuthStore((state) => state.logout);
   const addItem = useCartStore((state) => state.addItem);
@@ -92,31 +343,20 @@ const HomeScreen = ({ navigation, route }: Props) => {
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
   const [isServerOnline, setIsServerOnline] = useState<boolean | null>(null);
   const [selectedProductForBuy, setSelectedProductForBuy] = useState<Product | null>(null);
+  const [useOfflineFallback, setUseOfflineFallback] = useState(false);
 
   const scannedCode = route.params?.scannedCode;
 
   // Kiểm tra sức khỏe Server NestJS
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/health`)
-      .then((res) => setIsServerOnline(res.ok))
+    axiosClient
+      .get("/api/health", { timeout: 3000 })
+      .then((res) => setIsServerOnline(res.status === 200))
       .catch(() => setIsServerOnline(false));
   }, []);
 
-  const categories = [
-    "Tất cả",
-    "Tai nghe",
-    "Bàn phím",
-    "Chuột",
-    "Laptop",
-    "Tablet",
-    "Màn hình",
-    "TV",
-    "Điện thoại",
-    "Đồng hồ",
-  ];
-
   const {
-    data: allProducts = localFallbackProducts,
+    data: productsData,
     isLoading,
     isError,
     error,
@@ -125,12 +365,15 @@ const HomeScreen = ({ navigation, route }: Props) => {
   } = useQuery({
     queryKey: ["productsList"],
     queryFn: fetchProductsAPI,
-    initialData: localFallbackProducts,
+    retry: 1, // Chỉ thử lại 1 lần để báo lỗi nhanh chóng (dưới 5s) khi mất mạng
   });
 
-  // Xử lý khi quét mã QR/Barcode:
-  // Nếu có ID chính xác -> mở thẳng màn hình chi tiết món hàng.
-  // Nếu không -> đưa thẳng mã quét được vào thanh tìm kiếm.
+  // Nếu người dùng chọn dùng offline fallback hoặc có dữ liệu server
+  const allProducts = useOfflineFallback
+    ? localFallbackProducts
+    : productsData ?? [];
+
+  // Xử lý khi quét mã QR/Barcode
   useEffect(() => {
     if (scannedCode) {
       const codeStr = String(scannedCode).trim();
@@ -148,7 +391,6 @@ const HomeScreen = ({ navigation, route }: Props) => {
         setSearch(codeStr);
       }
 
-      // Xóa param scannedCode để tránh lặp lại khi user back về HomeScreen
       navigation.setParams({ scannedCode: undefined } as any);
     }
   }, [scannedCode, allProducts, navigation]);
@@ -156,7 +398,6 @@ const HomeScreen = ({ navigation, route }: Props) => {
   const filteredProducts = useMemo(() => {
     let result = allProducts;
 
-    // Tìm kiếm từ khóa
     if (search.trim()) {
       const keyword = search.toLowerCase().trim();
       result = result.filter((product) =>
@@ -164,7 +405,6 @@ const HomeScreen = ({ navigation, route }: Props) => {
       );
     }
 
-    // Lọc theo danh mục
     if (selectedCategory !== "Tất cả") {
       const categoryMap: Record<string, string[]> = {
         "Tai nghe": [
@@ -295,287 +535,209 @@ const HomeScreen = ({ navigation, route }: Props) => {
     );
   }, []);
 
-  // Header cuộn tự nhiên: Flash Sale, Search, Quick Actions, Categories
-  // Khi người dùng vuốt xem hàng hóa, toàn bộ phần này sẽ trượt ẩn đi mượt mà!
-  const renderListHeader = () => (
-    <View>
-      {/* Location / Shipping Banner */}
-      <LocationBadge />
-
-      {/* Quick Action Buttons */}
-      <View style={styles.quickActionsContainer}>
-        {/* Cart Button */}
-        <Pressable
-          style={[styles.quickBtn, styles.cartBtn]}
-          onPress={() => navigation.navigate("Cart")}
+  // Header trên cùng (luôn cố định để không bị kẹt khi mất mạng)
+  const renderHeaderTop = () => (
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: colors.surface,
+          borderBottomColor: isDark ? "#2D2D2D" : "#E5E7EB",
+          borderBottomWidth: 1,
+        },
+      ]}
+    >
+      <View style={styles.headerBranding}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={styles.appTitle}>Binh Pham Store</Text>
+          {isServerOnline !== null && (
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: isServerOnline ? "#10B981" : "#EF4444",
+                marginLeft: 6,
+              }}
+            />
+          )}
+        </View>
+        <Text
+          style={[styles.appSubtitle, { color: colors.textLight }]}
+          numberOfLines={1}
         >
-          <View style={styles.quickBtnRow}>
-            <Text style={styles.quickBtnEmoji}>🛒</Text>
-            <Text style={styles.cartBtnText} numberOfLines={1}>
-              Giỏ ({totalQuantity})
-            </Text>
-          </View>
-        </Pressable>
-
-        {/* AI Assistant Button */}
-        <Pressable
-          style={[styles.quickBtn, styles.aiBtn]}
-          onPress={() => navigation.navigate("AIChat")}
-        >
-          <View style={styles.quickBtnRow}>
-            <Text style={styles.quickBtnEmoji}>🤖</Text>
-            <Text style={styles.aiBtnText} numberOfLines={1}>
-              Hỏi AI
-            </Text>
-          </View>
-        </Pressable>
-
-        {/* Scan Button */}
-        <Pressable
-          style={[
-            styles.quickBtn,
-            styles.outlineBtn,
-            isDark && styles.outlineBtnDark,
-          ]}
-          onPress={() => navigation.navigate("Scanner")}
-        >
-          <View style={styles.quickBtnRow}>
-            <Text style={styles.quickBtnEmoji}>📷</Text>
-            <Text
-              style={[
-                styles.outlineBtnText,
-                isDark && { color: "#FFFFFF" },
-              ]}
-              numberOfLines={1}
-            >
-              Quét mã
-            </Text>
-          </View>
-        </Pressable>
-
-        {/* Order Tracking Button */}
-        <Pressable
-          style={[
-            styles.quickBtn,
-            styles.outlineBtn,
-            isDark && styles.outlineBtnDark,
-          ]}
-          onPress={() => navigation.navigate("Orders")}
-        >
-          <View style={styles.quickBtnRow}>
-            <Text style={styles.quickBtnEmoji}>🚚</Text>
-            <Text
-              style={[
-                styles.outlineBtnText,
-                isDark && { color: "#FFFFFF" },
-              ]}
-              numberOfLines={1}
-            >
-              Đơn hàng
-            </Text>
-          </View>
-        </Pressable>
+          Chào mừng đến với thế giới công nghệ
+        </Text>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchSection}>
-        <View
+      <View style={styles.headerControls}>
+        {/* Theme Toggle Button */}
+        <Pressable
+          onPress={toggleTheme}
           style={[
-            styles.searchContainer,
+            styles.pillBtn,
+            { backgroundColor: isDark ? "#333333" : "#F3F4F6" },
+          ]}
+        >
+          <Text style={{ fontSize: 13, marginRight: 4 }}>
+            {isDark ? "☀️" : "🌙"}
+          </Text>
+          <Text
+            style={[
+              styles.pillBtnText,
+              { color: isDark ? "#FFFFFF" : "#374151" },
+            ]}
+            numberOfLines={1}
+          >
+            {isDark ? "Sáng" : "Tối"}
+          </Text>
+        </Pressable>
+
+        {/* Logout Button */}
+        <Pressable
+          onPress={logout}
+          style={[
+            styles.pillBtn,
             {
-              backgroundColor: isDark ? "#262626" : "#F3F4F6",
-              borderColor: isDark ? "#404040" : "#E5E7EB",
+              backgroundColor: isDark ? "#2D1A1A" : "#FEF2F2",
+              borderColor: "#F87171",
+              borderWidth: 1,
             },
           ]}
         >
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Tìm kiếm điện thoại, tai nghe, đồng hồ..."
-            placeholderTextColor={isDark ? "#888888" : "#9CA3AF"}
-            style={[styles.searchInput, { color: colors.text }]}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} hitSlop={10}>
-              <Text style={{ color: "#9CA3AF", fontSize: 16, paddingHorizontal: 4 }}>
-                ✕
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      {/* Flash Sale Banner - bây giờ sẽ cuộn trượt ẩn đi khi lướt xem hàng hóa */}
-      <View style={styles.flashSaleBanner}>
-        <View style={styles.flashSaleLeft}>
-          <Text style={styles.flashSaleHeading}>⚡ FLASH SALE HÔM NAY</Text>
-          <Text style={styles.flashSaleSubtitle}>
-            Giảm đến 50% khi thanh toán qua ShopAI
+          <Text style={{ fontSize: 13, marginRight: 4 }}>🚪</Text>
+          <Text style={[styles.pillBtnText, { color: "#EF4444" }]} numberOfLines={1}>
+            Thoát
           </Text>
-        </View>
-        <View style={styles.flashSaleTimerCard}>
-          <Text style={styles.flashSaleTimerLabel}>Kết thúc trong</Text>
-          <FlashSaleCountdown />
-        </View>
+        </Pressable>
       </View>
-
-      {/* Categories Horizontal Bar */}
-      <View
-        style={[styles.categoryWrapper, { backgroundColor: colors.background }]}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryContainer}
-        >
-          {categories.map((category) => {
-            const active = selectedCategory === category;
-            return (
-              <Pressable
-                key={category}
-                onPress={() => setSelectedCategory(category)}
-                style={[
-                  styles.categoryButton,
-                  {
-                    backgroundColor: active
-                      ? "#FF5733"
-                      : isDark
-                      ? "#262626"
-                      : "#EEEEEE",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    {
-                      color: active
-                        ? "#FFFFFF"
-                        : isDark
-                        ? "#CCCCCC"
-                        : "#555555",
-                      fontWeight: active ? "700" : "500",
-                    },
-                  ]}
-                >
-                  {category}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Tiêu đề danh mục hàng hóa */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitleText, { color: colors.text }]}>
-          {selectedCategory === "Tất cả" ? "🔥 Tất cả sản phẩm" : `📱 ${selectedCategory}`}
-        </Text>
-        <Text style={[styles.sectionCountText, { color: colors.textLight }]}>
-          ({filteredProducts.length} món)
-        </Text>
-      </View>
-
-      {/* Loading / Error states */}
-      {isLoading && allProducts.length === 0 && (
-        <ActivityIndicator
-          size="large"
-          color="#FF5733"
-          style={{ marginVertical: 30 }}
-        />
-      )}
-
-      {isError && allProducts.length === 0 && (
-        <Text style={{ textAlign: "center", marginVertical: 30, color: "red" }}>
-          {(error as Error)?.message ?? "Lỗi kết nối máy chủ"}
-        </Text>
-      )}
     </View>
   );
 
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* 1. Header Section - Khóa ở trên đỉnh */}
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: isDark ? '#2D2D2D' : '#E5E7EB', borderBottomWidth: 1 }]}>
-          <View style={styles.headerBranding}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={styles.appTitle}>Binh Pham Store</Text>
-              {isServerOnline !== null && (
-                <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: isServerOnline ? "#10B981" : "#EF4444",
-                    marginLeft: 6,
-                  }}
-                />
-              )}
-            </View>
-            <Text
-              style={[styles.appSubtitle, { color: colors.textLight }]}
-              numberOfLines={1}
-            >
-              Chào mừng đến với thế giới công nghệ
-            </Text>
-          </View>
+  // ListHeaderComponent được memoize truyền dưới dạng React Element
+  // Giúp FlashList không unmount TextInput khi re-render
+  const listHeaderElement = useMemo(
+    () => (
+      <HomeListHeader
+        search={search}
+        onSearchChange={setSearch}
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
+        totalQuantity={totalQuantity}
+        filteredCount={filteredProducts.length}
+        navigation={navigation}
+        colors={colors}
+        isDark={isDark}
+        isOfflineFallback={useOfflineFallback}
+        onRetryServer={() => {
+          setUseOfflineFallback(false);
+          refetch();
+        }}
+      />
+    ),
+    [
+      search,
+      selectedCategory,
+      totalQuantity,
+      filteredProducts.length,
+      navigation,
+      colors,
+      isDark,
+      useOfflineFallback,
+      refetch,
+    ]
+  );
 
-          <View style={styles.headerControls}>
-            {/* Theme Toggle Button */}
-            <Pressable
-              onPress={toggleTheme}
-              style={[
-                styles.pillBtn,
-                { backgroundColor: isDark ? "#333333" : "#F3F4F6" },
-              ]}
-            >
-              <Text style={{ fontSize: 13, marginRight: 4 }}>
-                {isDark ? "☀️" : "🌙"}
-              </Text>
-              <Text
-                style={[
-                  styles.pillBtnText,
-                  { color: isDark ? "#FFFFFF" : "#374151" },
-                ]}
-                numberOfLines={1}
-              >
-                {isDark ? "Sáng" : "Tối"}
-              </Text>
-            </Pressable>
+  // 1. Màn hình BÁO LỖI MẠNG khi mất mạng/server tắt (không quay loading hoài)
+  if (isError && allProducts.length === 0 && !useOfflineFallback) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          {renderHeaderTop()}
 
-            {/* Logout Button */}
-            <Pressable
-              onPress={logout}
+          <View style={styles.errorContainer}>
+            <View
               style={[
-                styles.pillBtn,
+                styles.errorCard,
                 {
-                  backgroundColor: isDark ? "#2D1A1A" : "#FEF2F2",
-                  borderColor: "#F87171",
-                  borderWidth: 1,
+                  backgroundColor: colors.surface,
+                  borderColor: isDark ? "#404040" : "#FEE2E2",
                 },
               ]}
             >
-              <Text style={{ fontSize: 13, marginRight: 4 }}>🚪</Text>
-              <Text
-                style={[
-                  styles.pillBtnText,
-                  { color: "#EF4444" },
-                ]}
-                numberOfLines={1}
-              >
-                Thoát
+              <Text style={{ fontSize: 52, marginBottom: 16 }}>📡</Text>
+              <Text style={[styles.errorTitle, { color: colors.text }]}>
+                Không thể kết nối máy chủ
               </Text>
-            </Pressable>
+              <Text style={[styles.errorSubtitle, { color: colors.textLight }]}>
+                {error instanceof Error
+                  ? error.message
+                  : "Vui lòng kiểm tra lại kết nối Wi-Fi/4G hoặc đảm bảo Server NestJS đang hoạt động."}
+              </Text>
+
+              {/* Nút Thử lại */}
+              <Pressable
+                style={[styles.retryBtn, { opacity: isRefetching ? 0.7 : 1 }]}
+                onPress={() => refetch()}
+                disabled={isRefetching}
+              >
+                {isRefetching ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                ) : (
+                  <Text style={{ fontSize: 16, marginRight: 6 }}>🔄</Text>
+                )}
+                <Text style={styles.retryBtnText}>
+                  {isRefetching ? "Đang kết nối lại..." : "Thử kết nối lại"}
+                </Text>
+              </Pressable>
+
+              {/* Nút Xem dữ liệu mẫu ngoại tuyến */}
+              <Pressable
+                style={[
+                  styles.offlineBtn,
+                  { borderColor: isDark ? "#404040" : "#D1D5DB" },
+                ]}
+                onPress={() => setUseOfflineFallback(true)}
+              >
+                <Text style={[styles.offlineBtnText, { color: colors.text }]}>
+                  📦 Xem danh mục mẫu ngoại tuyến
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
+      </SafeAreaView>
+    );
+  }
 
-        {/* 2. Danh sách sản phẩm cuộn tự nhiên: Flash Sale & Search sẽ trượt ẩn đi khi cuộn xuống */}
+  // 2. Màn hình Loading lần đầu kết nối (tối đa 5s là có phản hồi, không treo vô tận)
+  if (isLoading && allProducts.length === 0 && !useOfflineFallback) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          {renderHeaderTop()}
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FF5733" />
+            <Text style={[styles.loadingText, { color: colors.textLight }]}>
+              Đang kết nối máy chủ và tải sản phẩm...
+            </Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // 3. Màn hình danh sách chính
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {renderHeaderTop()}
+
+        {/* Danh sách sản phẩm: ListHeaderComponent truyền ReactElement không bị unmount */}
         <FlashList
           data={filteredProducts}
           keyExtractor={(item) => String(item.id)}
-          ListHeaderComponent={renderListHeader}
+          ListHeaderComponent={listHeaderElement}
           renderItem={renderProductItem}
           numColumns={2}
           contentContainerStyle={{ paddingBottom: 24 }}
@@ -855,6 +1017,98 @@ const styles = StyleSheet.create({
   },
   sectionCountText: {
     fontSize: 13,
+    fontWeight: "500",
+  },
+
+  // Offline banner
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: SIZES.padding,
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  offlineBannerText: {
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
+
+  // Error screen styles
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  errorCard: {
+    width: "100%",
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  errorSubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  retryBtn: {
+    flexDirection: "row",
+    backgroundColor: "#FF5733",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    marginBottom: 10,
+  },
+  retryBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  offlineBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  offlineBtnText: {
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+  // Loading container
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
     fontWeight: "500",
   },
 });

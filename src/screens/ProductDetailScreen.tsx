@@ -20,21 +20,27 @@ import { HomeStackParamList } from '@navigation/HomeStackNavigator';
 import { useTheme } from '@contexts/ThemeContext';
 import { getProductImageSource } from '@data/productImages';
 import AddToCartModal from '@components/ui/AddToCartModal';
+import axiosClient from '@api/axiosClient';
 
 const fetchProductById = async (id: string): Promise<Product> => {
-  const response = await fetch(`${API_BASE_URL}/api/products/${id}`);
-  if (response.status === 404) {
-    throw new Error('Sản phẩm này không còn tồn tại trên hệ thống');
+  try {
+    const response = await axiosClient.get<Product>(`/api/products/${id}`, {
+      timeout: 5000,
+    });
+    const result = ProductSchema.safeParse(response.data);
+    if (!result.success) {
+      throw new Error('Dữ liệu chi tiết sản phẩm không hợp lệ (Zod)');
+    }
+    return result.data;
+  } catch (err: any) {
+    if (err.response?.status === 404) {
+      throw new Error('Sản phẩm này không còn tồn tại trên hệ thống');
+    }
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      throw new Error('Kết nối quá thời gian chờ (Timeout). Vui lòng thử lại!');
+    }
+    throw new Error('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!');
   }
-  if (!response.ok) {
-    throw new Error('Lỗi mạng khi tải chi tiết sản phẩm');
-  }
-  const raw = await response.json();
-  const result = ProductSchema.safeParse(raw);
-  if (!result.success) {
-    throw new Error('Dữ liệu chi tiết sản phẩm không hợp lệ (Zod)');
-  }
-  return result.data;
 };
 
 const getProductDescription = (product: Product): string => {
@@ -65,9 +71,10 @@ const ProductDetailScreen = () => {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  const { data: product, isLoading, isError, error } = useQuery({
+  const { data: product, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['product', productId],
     queryFn: () => fetchProductById(productId),
+    retry: 1,
     placeholderData: () =>
       queryClient
         .getQueryData<Product[]>(['productsList'])
@@ -86,14 +93,23 @@ const ProductDetailScreen = () => {
   if (isError || !product) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={[styles.errorText, { color: COLORS.danger }]}>
-          {(error as Error)?.message ?? 'Không tìm thấy sản phẩm'}
+        <Text style={{ fontSize: 48, marginBottom: 12 }}>📡</Text>
+        <Text style={[styles.errorText, { color: COLORS.danger, marginBottom: 16 }]}>
+          {(error as Error)?.message ?? 'Không tìm thấy sản phẩm hoặc mất kết nối'}
         </Text>
         <Pressable
-          style={[styles.backBtnFallback, { backgroundColor: '#FF5733' }]}
+          style={[styles.backBtnFallback, { backgroundColor: '#FF5733', marginBottom: 12 }]}
+          onPress={() => refetch()}
+        >
+          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+            {isRefetching ? 'Đang thử lại...' : '🔄 Thử kết nối lại'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.backBtnFallback, { backgroundColor: isDark ? '#333333' : '#E5E7EB' }]}
           onPress={() => navigation.goBack()}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Quay lại trang chủ</Text>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>← Quay lại</Text>
         </Pressable>
       </View>
     );

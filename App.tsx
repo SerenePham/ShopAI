@@ -21,7 +21,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // Dữ liệu còn "Tươi" trong 5 phút
-      retry: 2,
+      retry: 1, // Thử lại tối đa 1 lần để phản hồi lỗi mạng nhanh chóng (không bắt user chờ lâu)
     },
   },
 });
